@@ -23,8 +23,11 @@ database, no password auth — just enough to validate the idea.
 
 ## Google Sheet setup
 
-Create one spreadsheet with three tabs and these header rows (order matters
-for the seed script, but the app matches by column name so you can reorder):
+Create a blank Google Sheet, share it with your service account email
+(Editor access), and copy its spreadsheet ID (the long string in its URL)
+into `.env` as `GOOGLE_SHEET_ID`. You don't need to create tabs by hand —
+`npm run seed` creates the `Brands`, `Products`, and `Members` tabs (with
+correct headers) automatically if they don't already exist:
 
 **Brands**
 `BrandID | Name | Slug | LogoURL | Description | Active`
@@ -32,11 +35,8 @@ for the seed script, but the app matches by column name so you can reorder):
 **Products**
 `ProductID | BrandSlug | Name | Category | RetailPrice | MemberPrice | ImageURL | Description | Active`
 
-**Members** (the backend writes to this one — just create the header row)
+**Members** (the backend writes to this one as people subscribe)
 `MemberID | Name | Email | Phone | Role | BusinessName | Plan | AmountPaid | StartDate | RenewalDate | Status | PaystackReference`
-
-Share the spreadsheet with your Google service account email (Editor access),
-then copy the spreadsheet ID (the long string in its URL) into `.env`.
 
 ## Setup
 
@@ -46,9 +46,10 @@ then copy the spreadsheet ID (the long string in its URL) into `.env`.
    - `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`
      from a Google Cloud service account with the Sheets API enabled.
 2. `npm install`
-3. `npm run seed` — pushes sample brands/products into the sheet so you have
-   something to click through immediately. Safe to re-run; it overwrites the
-   `Brands`/`Products` tabs, not `Members`.
+3. `npm run seed` — creates the sheet tabs if missing, then pushes sample
+   brands/products in so you have something to click through immediately.
+   Safe to re-run; it overwrites the `Brands`/`Products` tabs, never touches
+   rows already in `Members`.
 4. `npm run dev` (or `npm start`) — serves the site and API at
    `http://localhost:5000`.
 5. (Optional, for renewals/cancellations) Point a Paystack webhook at
