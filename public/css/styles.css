@@ -166,6 +166,18 @@ section h2 {
 }
 
 /* Brand grid */
+.brand-category {
+  margin-bottom: 44px;
+}
+
+.category-heading {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
 .brand-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

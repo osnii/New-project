@@ -40,10 +40,12 @@ into `.env` as `GOOGLE_SHEET_ID`. You don't need to create tabs by hand —
 `npm run seed` creates the `Brands`, `Products`, and `Members` tabs (with
 correct headers) automatically if they don't already exist:
 
-**Brands**
-`BrandID | Name | Slug | LogoURL | Description | Active`
+**Brands** (`Category` groups brands on the Brands page — e.g. "Electronics",
+"Fashion & Apparel"; blank falls under "Other")
+`BrandID | Name | Category | Slug | LogoURL | Description | Active`
 
-**Products**
+**Products** (`Category` here is the product's category within its brand,
+e.g. "Televisions" — unrelated to the brand's own Category above)
 `ProductID | BrandSlug | Name | Category | RetailPrice | MemberPrice | ImageURL | Description | Active`
 
 **Members** (the backend writes to this one as people subscribe)

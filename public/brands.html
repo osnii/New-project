@@ -23,7 +23,7 @@
     <div class="container">
       <h2>Pick your brand</h2>
       <p class="section-subtitle">Each brand has its own catalog at wholesale, member-only pricing.</p>
-      <div id="brandGrid" class="brand-grid">
+      <div id="brandGroups">
         <p class="empty-state">Loading brands…</p>
       </div>
     </div>
@@ -39,33 +39,50 @@
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
 
+    function brandCardHtml(b) {
+      return `
+        <a class="brand-card" href="/brand.html?slug=${encodeURIComponent(b.Slug)}">
+          ${b.LogoURL ? `<img src="${b.LogoURL}" alt="${b.Name}" />` : ""}
+          <div class="brand-name">${b.Name}</div>
+        </a>`;
+    }
+
     async function loadBrands() {
-      const grid = document.getElementById("brandGrid");
+      const container = document.getElementById("brandGroups");
       try {
         const res = await fetch("/api/brands");
         const brands = await res.json();
 
         if (!res.ok) {
-          grid.innerHTML = `<p class="empty-state">Couldn't load brands: ${brands.error || res.statusText}</p>`;
+          container.innerHTML = `<p class="empty-state">Couldn't load brands: ${brands.error || res.statusText}</p>`;
           return;
         }
 
         if (!brands.length) {
-          grid.innerHTML = '<p class="empty-state">No brands yet — add rows to the Brands sheet.</p>';
+          container.innerHTML = '<p class="empty-state">No brands yet — add rows to the Brands sheet.</p>';
           return;
         }
 
-        grid.innerHTML = brands
+        // Group by Category, preserving the order categories first appear in
+        // the sheet. Brands with no Category land in "Other".
+        const groups = new Map();
+        for (const b of brands) {
+          const category = (b.Category || "").trim() || "Other";
+          if (!groups.has(category)) groups.set(category, []);
+          groups.get(category).push(b);
+        }
+
+        container.innerHTML = Array.from(groups.entries())
           .map(
-            (b) => `
-            <a class="brand-card" href="/brand.html?slug=${encodeURIComponent(b.Slug)}">
-              ${b.LogoURL ? `<img src="${b.LogoURL}" alt="${b.Name}" />` : ""}
-              <div class="brand-name">${b.Name}</div>
-            </a>`
+            ([category, categoryBrands]) => `
+            <div class="brand-category">
+              <h3 class="category-heading">${category}</h3>
+              <div class="brand-grid">${categoryBrands.map(brandCardHtml).join("")}</div>
+            </div>`
           )
           .join("");
       } catch {
-        grid.innerHTML = '<p class="empty-state">Couldn\'t load brands. Try again shortly.</p>';
+        container.innerHTML = '<p class="empty-state">Couldn\'t load brands. Try again shortly.</p>';
       }
     }
 
