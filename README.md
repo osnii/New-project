@@ -90,6 +90,10 @@ correct headers) automatically if they don't already exist:
   actually placing an order still happens off-platform (WhatsApp, phone,
   etc.) until that's worth building.
 - No admin UI for managing brands/products — edit the Google Sheet directly.
+- Confirmation emails send via plain Gmail SMTP — fine for testing, but
+  expect Spam-folder placement (no custom domain, no SPF/DKIM/DMARC
+  reputation) and a ~500/day sending cap. Before a real launch, switch to a
+  transactional email service (Resend, SendGrid, Mailgun) on your own domain.
 - Google Sheets as a database won't scale past a small catalog and low
   request volume, but it's fast to inspect and needs no server — right
   trade-off for validating demand before building a real backend.
