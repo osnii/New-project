@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirming Payment - PriceEdge</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <a href="/" class="logo">PriceEdge</a>
+    </nav>
+  </header>
+
+  <section>
+    <div class="container" style="text-align: center">
+      <h2 id="statusHeading">Confirming your payment…</h2>
+      <p class="section-subtitle" id="statusMessage">
+        Hang tight while we confirm your payment with Squad.
+      </p>
+      <a href="/brands.html" class="btn-primary" id="continueLink" style="display: none">Browse Brands</a>
+      <a href="/" class="btn-secondary" id="retryLink" style="display: none">Back to Home</a>
+    </div>
+  </section>
+
+  <script src="/js/app.js"></script>
+  <script>
+    async function confirmSquadPayment() {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get("transaction_ref");
+
+      const heading = document.getElementById("statusHeading");
+      const message = document.getElementById("statusMessage");
+
+      if (!ref) {
+        heading.textContent = "Something went wrong";
+        message.textContent = "No transaction reference was provided.";
+        document.getElementById("retryLink").style.display = "inline-block";
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/subscribe/squad/verify?ref=${encodeURIComponent(ref)}`);
+        const data = await res.json();
+
+        if (data.success) {
+          if (data.email) setStoredMemberEmail(data.email);
+          heading.textContent = "You're in!";
+          message.textContent = "Your PriceEdge membership is active.";
+          document.getElementById("continueLink").style.display = "inline-block";
+        } else {
+          heading.textContent = "Payment not confirmed";
+          message.textContent = data.error || "We couldn't confirm this payment.";
+          document.getElementById("retryLink").style.display = "inline-block";
+        }
+      } catch {
+        heading.textContent = "Something went wrong";
+        message.textContent = "Couldn't reach the server to confirm your payment.";
+        document.getElementById("retryLink").style.display = "inline-block";
+      }
+    }
+
+    confirmSquadPayment();
+  </script>
+</body>
+</html>

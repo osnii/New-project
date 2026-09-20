@@ -6,11 +6,27 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { readRows, appendRow, updateRowWhere } from "./lib/sheetsClient.js";
-import { PLANS, verifyTransaction, isValidWebhookSignature } from "./lib/paystack.js";
+import {
+  PLANS,
+  verifyTransaction as verifyPaystackTransaction,
+  isValidWebhookSignature as isValidPaystackSignature,
+} from "./lib/paystack.js";
+import {
+  initiateTransaction as initiateSquadTransaction,
+  verifyTransaction as verifySquadTransaction,
+  isValidWebhookSignature as isValidSquadSignature,
+} from "./lib/squad.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Squad has no client-side checkout widget: the frontend redirects the
+// browser to a hosted page and Squad redirects back to our callback with a
+// transaction_ref. We stash the signup form details here between those two
+// requests. In-memory, so it's lost on server restart — acceptable for an
+// MVP, but a real deploy should move this to the Sheet or a real store.
+const pendingSquadSignups = new Map();
 
 app.use(cors());
 app.use(express.static(path.join(__dirname, "public")));
@@ -27,6 +43,33 @@ app.get("/api/config", (req, res) => {
     ),
   });
 });
+
+async function memberExistsWithReference(reference) {
+  const members = await readRows("Members");
+  return members.some((m) => m.PaymentReference === reference);
+}
+
+function buildMemberRow({ reference, provider, name, email, phone, role, businessName, plan, amountPaid }) {
+  const startDate = new Date();
+  const renewalDate = new Date(startDate);
+  renewalDate.setMonth(renewalDate.getMonth() + 1);
+
+  return {
+    MemberID: reference,
+    Name: name,
+    Email: email,
+    Phone: phone || "",
+    Role: role === "contractor" ? "contractor" : "customer",
+    BusinessName: businessName || "",
+    Plan: plan,
+    AmountPaid: amountPaid,
+    StartDate: startDate.toISOString().split("T")[0],
+    RenewalDate: renewalDate.toISOString().split("T")[0],
+    Status: "Active",
+    PaymentProvider: provider,
+    PaymentReference: reference,
+  };
+}
 
 // ---- Brands & products (Google Sheets as the catalog) ----
 
@@ -92,36 +135,160 @@ app.post("/api/subscribe/verify", express.json(), async (req, res) => {
   }
 
   try {
-    const verification = await verifyTransaction(reference);
+    if (await memberExistsWithReference(reference)) {
+      return res.json({ success: true });
+    }
+
+    const verification = await verifyPaystackTransaction(reference);
 
     if (!verification.status || verification.data.status !== "success") {
       return res.json({ success: false, error: "Payment not verified" });
     }
 
-    const startDate = new Date();
-    const renewalDate = new Date(startDate);
-    renewalDate.setMonth(renewalDate.getMonth() + 1);
-
-    await appendRow("Members", {
-      MemberID: reference,
-      Name: name,
-      Email: email,
-      Phone: phone || "",
-      Role: role === "contractor" ? "contractor" : "customer",
-      BusinessName: businessName || "",
-      Plan: plan,
-      AmountPaid: verification.data.amount / 100,
-      StartDate: startDate.toISOString().split("T")[0],
-      RenewalDate: renewalDate.toISOString().split("T")[0],
-      Status: "Active",
-      PaystackReference: reference,
-    });
+    await appendRow(
+      "Members",
+      buildMemberRow({
+        reference,
+        provider: "paystack",
+        name,
+        email,
+        phone,
+        role,
+        businessName,
+        plan,
+        amountPaid: verification.data.amount / 100,
+      })
+    );
 
     res.json({ success: true });
   } catch (err) {
     console.error("Error verifying payment:", err.response?.data || err.message);
     res.status(500).json({ success: false, error: "Verification failed" });
   }
+});
+
+// ---- Squad: hosted checkout redirect flow ----
+
+app.post("/api/subscribe/squad/initiate", express.json(), async (req, res) => {
+  const { name, email, phone, role, businessName, plan } = req.body;
+
+  if (!name || !email || !plan || !PLANS[plan]) {
+    return res.status(400).json({ success: false, error: "Missing or invalid fields" });
+  }
+
+  const transactionRef = `SQ-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  pendingSquadSignups.set(transactionRef, { name, email, phone, role, businessName, plan });
+
+  try {
+    const callbackUrl = `${req.protocol}://${req.get("host")}/squad-callback.html?transaction_ref=${transactionRef}`;
+    const result = await initiateSquadTransaction({
+      email,
+      amountNaira: PLANS[plan].amountNaira,
+      transactionRef,
+      callbackUrl,
+      metadata: { name, phone, role, businessName, plan },
+    });
+
+    res.json({ success: true, checkoutUrl: result.data.checkout_url });
+  } catch (err) {
+    pendingSquadSignups.delete(transactionRef);
+    console.error("Error initiating Squad payment:", err.response?.data || err.message);
+    res.status(500).json({ success: false, error: "Could not start payment" });
+  }
+});
+
+app.get("/api/subscribe/squad/verify", async (req, res) => {
+  const { ref } = req.query;
+  if (!ref) return res.status(400).json({ success: false, error: "Missing reference" });
+
+  try {
+    if (await memberExistsWithReference(ref)) {
+      const pendingEmail = pendingSquadSignups.get(ref)?.email;
+      pendingSquadSignups.delete(ref);
+      return res.json({ success: true, email: pendingEmail || null });
+    }
+
+    const verification = await verifySquadTransaction(ref);
+    const data = verification.data;
+
+    if (!verification.success || data.transaction_status !== "Success") {
+      return res.json({ success: false, error: "Payment not verified" });
+    }
+
+    const pending = pendingSquadSignups.get(ref);
+    const planKey = pending?.plan || Object.keys(PLANS).find(
+      (key) => Math.round(PLANS[key].amountNaira * 100) === data.transaction_amount
+    );
+
+    await appendRow(
+      "Members",
+      buildMemberRow({
+        reference: ref,
+        provider: "squad",
+        name: pending?.name || data.email,
+        email: data.email,
+        phone: pending?.phone,
+        role: pending?.role,
+        businessName: pending?.businessName,
+        plan: planKey || "unknown",
+        amountPaid: data.transaction_amount / 100,
+      })
+    );
+
+    pendingSquadSignups.delete(ref);
+    res.json({ success: true, email: data.email });
+  } catch (err) {
+    console.error("Error verifying Squad payment:", err.response?.data || err.message);
+    res.status(500).json({ success: false, error: "Verification failed" });
+  }
+});
+
+// Backup path in case the customer never makes it back to squad-callback.html
+// (closed the tab, connection dropped, etc.) — /api/subscribe/squad/verify
+// above is still the primary path since it's what tells the browser "you're
+// in". Both check memberExistsWithReference first, so whichever fires second
+// is a no-op.
+app.post("/api/squad/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const signature = req.headers["x-squad-encrypted-body"];
+  if (!signature || !isValidSquadSignature(req.body, signature)) {
+    return res.status(401).send("Invalid signature");
+  }
+
+  const event = JSON.parse(req.body.toString("utf8"));
+
+  try {
+    if (event.Event === "charge_successful" && event.Body?.transaction_status === "Success") {
+      const body = event.Body;
+      const ref = body.transaction_ref;
+
+      if (!(await memberExistsWithReference(ref))) {
+        const pending = pendingSquadSignups.get(ref);
+        const planKey = pending?.plan || Object.keys(PLANS).find(
+          (key) => Math.round(PLANS[key].amountNaira * 100) === body.amount
+        );
+
+        await appendRow(
+          "Members",
+          buildMemberRow({
+            reference: ref,
+            provider: "squad",
+            name: pending?.name || body.email,
+            email: body.email,
+            phone: pending?.phone,
+            role: pending?.role,
+            businessName: pending?.businessName,
+            plan: planKey || "unknown",
+            amountPaid: body.amount / 100,
+          })
+        );
+        pendingSquadSignups.delete(ref);
+      }
+    }
+  } catch (err) {
+    console.error("Error handling Squad webhook event:", err.message);
+  }
+
+  res.sendStatus(200);
 });
 
 // Paystack webhook needs the raw body to check the signature, so it gets its own
@@ -131,7 +298,7 @@ app.post(
   express.raw({ type: "application/json" }),
   async (req, res) => {
     const signature = req.headers["x-paystack-signature"];
-    if (!signature || !isValidWebhookSignature(req.body, signature)) {
+    if (!signature || !isValidPaystackSignature(req.body, signature)) {
       return res.status(401).send("Invalid signature");
     }
 

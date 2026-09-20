@@ -38,7 +38,8 @@ const MEMBERS_HEADER = [
   "StartDate",
   "RenewalDate",
   "Status",
-  "PaystackReference",
+  "PaymentProvider",
+  "PaymentReference",
 ];
 
 function readJson(fileName) {

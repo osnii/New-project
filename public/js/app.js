@@ -59,7 +59,47 @@ async function handleSubscriptionSubmit(event) {
   const phone = document.getElementById("userPhone").value.trim();
   const role = document.getElementById("userRole").value;
   const businessName = document.getElementById("userBusinessName").value.trim();
+  const provider = document.querySelector('input[name="paymentProvider"]:checked')?.value || "paystack";
 
+  const signupDetails = { name, email, phone, role, businessName, plan: planKey };
+
+  if (provider === "squad") {
+    await paySubscriptionWithSquad(signupDetails);
+  } else {
+    await paySubscriptionWithPaystack(signupDetails);
+  }
+}
+
+async function paySubscriptionWithSquad({ name, email, phone, role, businessName, plan: planKey }) {
+  const continueBtn = document.getElementById("continueBtn");
+  const originalText = continueBtn.textContent;
+  continueBtn.textContent = "Redirecting...";
+  continueBtn.disabled = true;
+
+  try {
+    const res = await fetch("/api/subscribe/squad/initiate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, phone, role, businessName, plan: planKey }),
+    });
+    const data = await res.json();
+
+    if (!data.success || !data.checkoutUrl) {
+      showToast(data.error || "Couldn't start Squad checkout.");
+      continueBtn.textContent = originalText;
+      continueBtn.disabled = false;
+      return;
+    }
+
+    window.location.assign(data.checkoutUrl);
+  } catch {
+    showToast("Something went wrong starting Squad checkout.");
+    continueBtn.textContent = originalText;
+    continueBtn.disabled = false;
+  }
+}
+
+async function paySubscriptionWithPaystack({ name, email, phone, role, businessName, plan: planKey }) {
   const config = await getConfig();
   const plan = config.plans[planKey];
   if (!plan || !plan.code) {
