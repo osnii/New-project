@@ -79,7 +79,9 @@ function buildMemberRow({ reference, provider, name, email, phone, role, busines
 // already recorded — log and move on.
 async function notifyNewMember({ email, name, plan, provider, renewalDate }) {
   try {
+    console.log(`Sending confirmation email to ${email} via ${provider}...`);
     await sendSubscriptionConfirmation({ to: email, name, plan, provider, renewalDate });
+    console.log(`Confirmation email sent to ${email}.`);
   } catch (err) {
     console.error("Error sending confirmation email:", err.message);
   }
@@ -216,13 +218,16 @@ app.get("/api/subscribe/squad/verify", async (req, res) => {
 
   try {
     if (await memberExistsWithReference(ref)) {
+      console.log(`Squad verify: ${ref} already recorded, skipping (no duplicate email sent).`);
       const pendingEmail = pendingSquadSignups.get(ref)?.email;
       pendingSquadSignups.delete(ref);
       return res.json({ success: true, email: pendingEmail || null });
     }
 
+    console.log(`Squad verify: checking ${ref} with Squad...`);
     const verification = await verifySquadTransaction(ref);
     const data = verification.data;
+    console.log(`Squad verify: transaction_status=${data.transaction_status}, email=${data.email}`);
 
     if (!verification.success || data.transaction_status?.toLowerCase() !== "success") {
       return res.json({ success: false, error: "Payment not verified" });
