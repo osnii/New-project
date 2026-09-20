@@ -118,6 +118,11 @@
           <label class="form-label" for="userBusinessName">Business Name (optional)</label>
           <input type="text" class="form-input" id="userBusinessName" />
         </div>
+        <!--
+          Paystack is temporarily hidden until its live keys are configured
+          (.env still has placeholders). Bring it back by un-commenting this
+          radio and removing the hidden Squad input below it — no other
+          changes needed, app.js already reads whichever is selected.
         <div class="form-group">
           <label class="form-label">Pay with</label>
           <label style="display: flex; align-items: center; gap: 8px; font-weight: 400; margin-bottom: 6px;">
@@ -127,6 +132,8 @@
             <input type="radio" name="paymentProvider" value="squad" /> Squad (card, bank, USSD)
           </label>
         </div>
+        -->
+        <input type="hidden" name="paymentProvider" value="squad" />
         <div class="modal-buttons">
           <button type="button" class="btn-cancel" onclick="closeSubscriptionModal()">Cancel</button>
           <button type="submit" class="btn-continue" id="continueBtn">Continue to Payment</button>

@@ -59,7 +59,13 @@ async function handleSubscriptionSubmit(event) {
   const phone = document.getElementById("userPhone").value.trim();
   const role = document.getElementById("userRole").value;
   const businessName = document.getElementById("userBusinessName").value.trim();
-  const provider = document.querySelector('input[name="paymentProvider"]:checked')?.value || "paystack";
+  // ":checked" only matches radio/checkbox inputs, so when Paystack's radio
+  // is commented out in favor of a plain hidden input, fall back to reading
+  // that instead.
+  const providerInput =
+    document.querySelector('input[name="paymentProvider"]:checked') ||
+    document.querySelector('input[name="paymentProvider"]');
+  const provider = providerInput?.value || "squad";
 
   const signupDetails = { name, email, phone, role, businessName, plan: planKey };
 
