@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Account - PriceEdge</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <a href="/" class="logo">PriceEdge</a>
+      <ul class="nav-links">
+        <li><a href="/brands.html">Brands</a></li>
+        <li><a href="/#pricing">Pricing</a></li>
+        <li><a href="/account.html">My Account</a></li>
+      </ul>
+      <a href="/#pricing" class="cta-button">Join Now</a>
+    </nav>
+  </header>
+
+  <section>
+    <div class="container">
+      <h2>My Account</h2>
+      <p class="section-subtitle">
+        Enter the email you subscribed with to view your membership.
+        This MVP recognizes you by email only — there's no password yet.
+      </p>
+
+      <div class="account-box">
+        <div class="form-group">
+          <label class="form-label" for="lookupEmail">Email Address</label>
+          <input type="email" class="form-input" id="lookupEmail" placeholder="you@example.com" />
+        </div>
+        <button class="btn-primary" style="width: 100%" onclick="lookupAccount()">View My Account</button>
+
+        <div id="accountDetails" style="margin-top: 24px; display: none">
+          <div class="account-row"><span>Name</span><strong id="accName"></strong></div>
+          <div class="account-row"><span>Role</span><strong id="accRole"></strong></div>
+          <div class="account-row"><span>Plan</span><strong id="accPlan"></strong></div>
+          <div class="account-row"><span>Status</span><strong id="accStatus"></strong></div>
+          <div class="account-row"><span>Renews</span><strong id="accRenewal"></strong></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">&copy; <span id="year"></span> PriceEdge. All rights reserved.</div>
+  </footer>
+
+  <div id="toast" class="toast"><span id="toastMessage"></span></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    const stored = getStoredMemberEmail();
+    if (stored) document.getElementById("lookupEmail").value = stored;
+
+    async function lookupAccount() {
+      const email = document.getElementById("lookupEmail").value.trim();
+      if (!email) {
+        showToast("Enter an email address first.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/account?email=${encodeURIComponent(email)}`);
+        if (res.status === 404) {
+          showToast("No membership found for that email.");
+          document.getElementById("accountDetails").style.display = "none";
+          return;
+        }
+
+        const data = await res.json();
+        setStoredMemberEmail(email);
+
+        document.getElementById("accName").textContent = data.name;
+        document.getElementById("accRole").textContent = data.role === "contractor" ? "Contractor / Wholesale Distributor" : "Customer";
+        document.getElementById("accPlan").textContent = data.plan;
+        const statusEl = document.getElementById("accStatus");
+        statusEl.textContent = data.status;
+        statusEl.className = data.status === "Active" ? "status-active" : "";
+        document.getElementById("accRenewal").textContent = data.renewalDate;
+
+        document.getElementById("accountDetails").style.display = "block";
+      } catch {
+        showToast("Couldn't load your account. Try again shortly.");
+      }
+    }
+
+    if (stored) lookupAccount();
+  </script>
+</body>
+</html>

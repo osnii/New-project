@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Browse Brands - PriceEdge</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <a href="/" class="logo">PriceEdge</a>
+      <ul class="nav-links">
+        <li><a href="/brands.html">Brands</a></li>
+        <li><a href="/#pricing">Pricing</a></li>
+        <li><a href="/account.html">My Account</a></li>
+      </ul>
+      <a href="/#pricing" class="cta-button">Join Now</a>
+    </nav>
+  </header>
+
+  <section>
+    <div class="container">
+      <h2>Pick your brand</h2>
+      <p class="section-subtitle">Each brand has its own catalog at wholesale, member-only pricing.</p>
+      <div id="brandGrid" class="brand-grid">
+        <p class="empty-state">Loading brands…</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">&copy; <span id="year"></span> PriceEdge. All rights reserved.</div>
+  </footer>
+
+  <div id="toast" class="toast"><span id="toastMessage"></span></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    async function loadBrands() {
+      const grid = document.getElementById("brandGrid");
+      try {
+        const res = await fetch("/api/brands");
+        const brands = await res.json();
+
+        if (!brands.length) {
+          grid.innerHTML = '<p class="empty-state">No brands yet — add rows to the Brands sheet.</p>';
+          return;
+        }
+
+        grid.innerHTML = brands
+          .map(
+            (b) => `
+            <a class="brand-card" href="/brand.html?slug=${encodeURIComponent(b.Slug)}">
+              ${b.LogoURL ? `<img src="${b.LogoURL}" alt="${b.Name}" />` : ""}
+              <div class="brand-name">${b.Name}</div>
+            </a>`
+          )
+          .join("");
+      } catch {
+        grid.innerHTML = '<p class="empty-state">Couldn\'t load brands. Try again shortly.</p>';
+      }
+    }
+
+    loadBrands();
+  </script>
+</body>
+</html>

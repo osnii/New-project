@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PriceEdge - The Smart Buyer's Edge</title>
+  <meta name="description" content="Pick your brand, unlock wholesale pricing. A subscription marketplace for premium electronics brands in Nigeria." />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <a href="/" class="logo">PriceEdge</a>
+      <ul class="nav-links">
+        <li><a href="/brands.html">Brands</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="/account.html">My Account</a></li>
+      </ul>
+      <a href="#pricing" class="cta-button">Join Now</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <h1>Wholesale prices.<br />Premium brands.</h1>
+      <p>
+        Subscribe once, then pick any brand you trust — Samsung, LG, Sony and more —
+        and buy at the prices dealers pay. Built for professionals, business owners,
+        and contractors who buy electronics regularly.
+      </p>
+      <div class="hero-cta">
+        <a href="/brands.html" class="btn-primary">Browse Brands</a>
+        <a href="#pricing" class="btn-secondary">See Plans</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="how-it-works">
+    <div class="container">
+      <h2>How it works</h2>
+      <p class="section-subtitle">Three steps between you and wholesale pricing.</p>
+      <div class="plans-grid">
+        <div class="plan-card">
+          <h3>1. Subscribe</h3>
+          <p class="desc">Pick a monthly plan. Takes about a minute.</p>
+        </div>
+        <div class="plan-card">
+          <h3>2. Pick a brand</h3>
+          <p class="desc">Browse the brands you already buy — one catalog per brand.</p>
+        </div>
+        <div class="plan-card">
+          <h3>3. Buy at member price</h3>
+          <p class="desc">See dealer-level pricing and order directly.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" style="background: var(--bg-soft)">
+    <div class="container">
+      <h2>Choose your plan</h2>
+      <p class="section-subtitle">Cancel anytime. Same pricing whether you're a customer or a contractor.</p>
+      <div class="plans-grid">
+        <div class="plan-card">
+          <h3>Basic</h3>
+          <div class="plan-price">₦2,500<span>/mo</span></div>
+          <p class="desc">20+ deals across brands, monthly price list.</p>
+          <button class="btn-primary" onclick="openSubscribeModal('basic')">Join Basic</button>
+        </div>
+        <div class="plan-card featured">
+          <h3>Pro</h3>
+          <div class="plan-price">₦5,000<span>/mo</span></div>
+          <p class="desc">Full catalog access across all brands, priority support.</p>
+          <button class="btn-primary" onclick="openSubscribeModal('pro')">Join Pro</button>
+        </div>
+        <div class="plan-card">
+          <h3>Elite</h3>
+          <div class="plan-price">₦10,000<span>/mo</span></div>
+          <p class="desc">Everything in Pro, plus bulk/contractor order support.</p>
+          <button class="btn-primary" onclick="openSubscribeModal('elite')">Join Elite</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">&copy; <span id="year"></span> PriceEdge. All rights reserved.</div>
+  </footer>
+
+  <!-- Subscription Modal -->
+  <div id="subscriptionModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeSubscriptionModal()">&times;</button>
+      <h2 class="modal-title" id="modalPlanName"></h2>
+      <div class="modal-price" id="modalPlanPrice"></div>
+      <form id="subscriptionForm">
+        <input type="hidden" id="modalPlanKey" />
+        <div class="form-group">
+          <label class="form-label" for="userName">Full Name</label>
+          <input type="text" class="form-input" id="userName" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="userEmail">Email Address</label>
+          <input type="email" class="form-input" id="userEmail" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="userPhone">Phone Number</label>
+          <input type="tel" class="form-input" id="userPhone" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="userRole">I am a</label>
+          <select class="form-select" id="userRole">
+            <option value="customer">Customer</option>
+            <option value="contractor">Contractor / Wholesale Distributor</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="userBusinessName">Business Name (optional)</label>
+          <input type="text" class="form-input" id="userBusinessName" />
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-cancel" onclick="closeSubscriptionModal()">Cancel</button>
+          <button type="submit" class="btn-continue" id="continueBtn">Continue to Payment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"><span id="toastMessage"></span></div>
+
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script src="/js/app.js"></script>
+  <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+</body>
+</html>

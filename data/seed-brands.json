@@ -1,0 +1,26 @@
+[
+  {
+    "BrandID": "B001",
+    "Name": "Samsung",
+    "Slug": "samsung",
+    "LogoURL": "https://logos-world.net/wp-content/uploads/2020/04/Samsung-Logo.png",
+    "Description": "TVs, phones, and home appliances.",
+    "Active": "TRUE"
+  },
+  {
+    "BrandID": "B002",
+    "Name": "LG",
+    "Slug": "lg",
+    "LogoURL": "https://logos-world.net/wp-content/uploads/2020/05/LG-Logo.png",
+    "Description": "TVs, refrigerators, and air conditioners.",
+    "Active": "TRUE"
+  },
+  {
+    "BrandID": "B003",
+    "Name": "Sony",
+    "Slug": "sony",
+    "LogoURL": "https://logos-world.net/wp-content/uploads/2020/04/Sony-Logo.png",
+    "Description": "Audio, TVs, and cameras.",
+    "Active": "TRUE"
+  }
+]

@@ -1,0 +1,46 @@
+[
+  {
+    "ProductID": "P001",
+    "BrandSlug": "samsung",
+    "Name": "Samsung 43\" Smart TV AU7000",
+    "Category": "Televisions",
+    "RetailPrice": "320000",
+    "MemberPrice": "245000",
+    "ImageURL": "",
+    "Description": "43-inch 4K UHD Smart TV.",
+    "Active": "TRUE"
+  },
+  {
+    "ProductID": "P002",
+    "BrandSlug": "samsung",
+    "Name": "Samsung 300L Double Door Fridge",
+    "Category": "Refrigerators",
+    "RetailPrice": "285000",
+    "MemberPrice": "195000",
+    "ImageURL": "",
+    "Description": "300-litre double door refrigerator.",
+    "Active": "TRUE"
+  },
+  {
+    "ProductID": "P003",
+    "BrandSlug": "lg",
+    "Name": "LG 43\" Smart TV UP7500",
+    "Category": "Televisions",
+    "RetailPrice": "310000",
+    "MemberPrice": "235000",
+    "ImageURL": "",
+    "Description": "43-inch 4K UHD Smart TV.",
+    "Active": "TRUE"
+  },
+  {
+    "ProductID": "P004",
+    "BrandSlug": "sony",
+    "Name": "Sony WH-1000XM5 Headphones",
+    "Category": "Audio",
+    "RetailPrice": "310000",
+    "MemberPrice": "265000",
+    "ImageURL": "",
+    "Description": "Noise-cancelling wireless headphones.",
+    "Active": "TRUE"
+  }
+]

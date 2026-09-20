@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="pageTitle">Brand - PriceEdge</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <a href="/" class="logo">PriceEdge</a>
+      <ul class="nav-links">
+        <li><a href="/brands.html">Brands</a></li>
+        <li><a href="/#pricing">Pricing</a></li>
+        <li><a href="/account.html">My Account</a></li>
+      </ul>
+      <a href="/#pricing" class="cta-button">Join Now</a>
+    </nav>
+  </header>
+
+  <section>
+    <div class="container">
+      <h2 id="brandHeading">Products</h2>
+      <p class="section-subtitle" id="lockedNotice" style="display: none">
+        Retail prices are shown below. <a href="/#pricing">Subscribe</a> or
+        <a href="/account.html">sign in</a> to see member wholesale pricing.
+      </p>
+      <div id="productGrid" class="product-grid">
+        <p class="empty-state">Loading products…</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">&copy; <span id="year"></span> PriceEdge. All rights reserved.</div>
+  </footer>
+
+  <div id="toast" class="toast"><span id="toastMessage"></span></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get("slug");
+
+    async function loadProducts() {
+      const grid = document.getElementById("productGrid");
+      const heading = document.getElementById("brandHeading");
+
+      if (!slug) {
+        grid.innerHTML = '<p class="empty-state">No brand selected. <a href="/brands.html">Browse brands</a>.</p>';
+        return;
+      }
+
+      heading.textContent = slug.charAt(0).toUpperCase() + slug.slice(1);
+      document.getElementById("pageTitle").textContent = `${heading.textContent} - PriceEdge`;
+
+      const email = getStoredMemberEmail();
+      const url = `/api/brands/${encodeURIComponent(slug)}/products` + (email ? `?email=${encodeURIComponent(email)}` : "");
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.locked) {
+          document.getElementById("lockedNotice").style.display = "block";
+        }
+
+        if (!data.products || !data.products.length) {
+          grid.innerHTML = '<p class="empty-state">No products listed for this brand yet.</p>';
+          return;
+        }
+
+        grid.innerHTML = data.products
+          .map((p) => {
+            const priceHtml = p.memberPrice
+              ? `<span class="retail-price">₦${p.retailPrice.toLocaleString()}</span>
+                 <span class="member-price">₦${p.memberPrice.toLocaleString()}</span>`
+              : `<span class="retail-price">₦${p.retailPrice.toLocaleString()}</span>
+                 <span class="locked-price">Member price locked</span>`;
+
+            return `
+              <div class="product-card">
+                ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" />` : ""}
+                <div class="product-body">
+                  <h3>${p.name}</h3>
+                  <div class="category">${p.category || ""}</div>
+                  <div class="price-row">${priceHtml}</div>
+                </div>
+              </div>`;
+          })
+          .join("");
+      } catch {
+        grid.innerHTML = '<p class="empty-state">Couldn\'t load products. Try again shortly.</p>';
+      }
+    }
+
+    loadProducts();
+  </script>
+</body>
+</html>
