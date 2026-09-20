@@ -211,12 +211,15 @@ app.get("/api/subscribe/squad/verify", async (req, res) => {
     const verification = await verifySquadTransaction(ref);
     const data = verification.data;
 
-    if (!verification.success || data.transaction_status !== "Success") {
+    if (!verification.success || data.transaction_status?.toLowerCase() !== "success") {
       return res.json({ success: false, error: "Payment not verified" });
     }
 
+    // Squad echoes back our initiate-time metadata on every verify call, which
+    // survives a server restart — more reliable than the in-memory pending map.
+    const meta = data.meta || {};
     const pending = pendingSquadSignups.get(ref);
-    const planKey = pending?.plan || Object.keys(PLANS).find(
+    const planKey = meta.plan || pending?.plan || Object.keys(PLANS).find(
       (key) => Math.round(PLANS[key].amountNaira * 100) === data.transaction_amount
     );
 
@@ -225,11 +228,11 @@ app.get("/api/subscribe/squad/verify", async (req, res) => {
       buildMemberRow({
         reference: ref,
         provider: "squad",
-        name: pending?.name || data.email,
+        name: meta.name || pending?.name || data.email,
         email: data.email,
-        phone: pending?.phone,
-        role: pending?.role,
-        businessName: pending?.businessName,
+        phone: meta.phone || pending?.phone,
+        role: meta.role || pending?.role,
+        businessName: meta.businessName || pending?.businessName,
         plan: planKey || "unknown",
         amountPaid: data.transaction_amount / 100,
       })
@@ -257,13 +260,14 @@ app.post("/api/squad/webhook", express.raw({ type: "application/json" }), async 
   const event = JSON.parse(req.body.toString("utf8"));
 
   try {
-    if (event.Event === "charge_successful" && event.Body?.transaction_status === "Success") {
+    if (event.Event === "charge_successful" && event.Body?.transaction_status?.toLowerCase() === "success") {
       const body = event.Body;
       const ref = body.transaction_ref;
 
       if (!(await memberExistsWithReference(ref))) {
+        const meta = body.meta || {};
         const pending = pendingSquadSignups.get(ref);
-        const planKey = pending?.plan || Object.keys(PLANS).find(
+        const planKey = meta.plan || pending?.plan || Object.keys(PLANS).find(
           (key) => Math.round(PLANS[key].amountNaira * 100) === body.amount
         );
 
@@ -272,11 +276,11 @@ app.post("/api/squad/webhook", express.raw({ type: "application/json" }), async 
           buildMemberRow({
             reference: ref,
             provider: "squad",
-            name: pending?.name || body.email,
+            name: meta.name || pending?.name || body.email,
             email: body.email,
-            phone: pending?.phone,
-            role: pending?.role,
-            businessName: pending?.businessName,
+            phone: meta.phone || pending?.phone,
+            role: meta.role || pending?.role,
+            businessName: meta.businessName || pending?.businessName,
             plan: planKey || "unknown",
             amountPaid: body.amount / 100,
           })
