@@ -74,6 +74,12 @@
         }
 
         const data = await res.json();
+
+        if (!res.ok) {
+          showToast(data.error || "Couldn't load your account.");
+          return;
+        }
+
         setStoredMemberEmail(email);
 
         document.getElementById("accName").textContent = data.name;

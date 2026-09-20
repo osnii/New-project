@@ -45,6 +45,11 @@
         const res = await fetch("/api/brands");
         const brands = await res.json();
 
+        if (!res.ok) {
+          grid.innerHTML = `<p class="empty-state">Couldn't load brands: ${brands.error || res.statusText}</p>`;
+          return;
+        }
+
         if (!brands.length) {
           grid.innerHTML = '<p class="empty-state">No brands yet — add rows to the Brands sheet.</p>';
           return;

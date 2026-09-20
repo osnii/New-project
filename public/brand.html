@@ -64,6 +64,11 @@
         const res = await fetch(url);
         const data = await res.json();
 
+        if (!res.ok) {
+          grid.innerHTML = `<p class="empty-state">Couldn't load products: ${data.error || res.statusText}</p>`;
+          return;
+        }
+
         if (data.locked) {
           document.getElementById("lockedNotice").style.display = "block";
         }
