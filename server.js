@@ -16,6 +16,7 @@ import {
   verifyTransaction as verifySquadTransaction,
   isValidWebhookSignature as isValidSquadSignature,
 } from "./lib/squad.js";
+import { sendSubscriptionConfirmation } from "./lib/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -53,8 +54,9 @@ function buildMemberRow({ reference, provider, name, email, phone, role, busines
   const startDate = new Date();
   const renewalDate = new Date(startDate);
   renewalDate.setMonth(renewalDate.getMonth() + 1);
+  const renewalDateStr = renewalDate.toISOString().split("T")[0];
 
-  return {
+  const row = {
     MemberID: reference,
     Name: name,
     Email: email,
@@ -64,11 +66,23 @@ function buildMemberRow({ reference, provider, name, email, phone, role, busines
     Plan: plan,
     AmountPaid: amountPaid,
     StartDate: startDate.toISOString().split("T")[0],
-    RenewalDate: renewalDate.toISOString().split("T")[0],
+    RenewalDate: renewalDateStr,
     Status: "Active",
     PaymentProvider: provider,
     PaymentReference: reference,
   };
+
+  return { row, renewalDate: renewalDateStr };
+}
+
+// Email failures shouldn't fail a payment that already succeeded and is
+// already recorded — log and move on.
+async function notifyNewMember({ email, name, plan, provider, renewalDate }) {
+  try {
+    await sendSubscriptionConfirmation({ to: email, name, plan, provider, renewalDate });
+  } catch (err) {
+    console.error("Error sending confirmation email:", err.message);
+  }
 }
 
 // ---- Brands & products (Google Sheets as the catalog) ----
@@ -145,20 +159,19 @@ app.post("/api/subscribe/verify", express.json(), async (req, res) => {
       return res.json({ success: false, error: "Payment not verified" });
     }
 
-    await appendRow(
-      "Members",
-      buildMemberRow({
-        reference,
-        provider: "paystack",
-        name,
-        email,
-        phone,
-        role,
-        businessName,
-        plan,
-        amountPaid: verification.data.amount / 100,
-      })
-    );
+    const { row, renewalDate } = buildMemberRow({
+      reference,
+      provider: "paystack",
+      name,
+      email,
+      phone,
+      role,
+      businessName,
+      plan,
+      amountPaid: verification.data.amount / 100,
+    });
+    await appendRow("Members", row);
+    await notifyNewMember({ email, name, plan, provider: "Paystack", renewalDate });
 
     res.json({ success: true });
   } catch (err) {
@@ -223,20 +236,20 @@ app.get("/api/subscribe/squad/verify", async (req, res) => {
       (key) => Math.round(PLANS[key].amountNaira * 100) === data.transaction_amount
     );
 
-    await appendRow(
-      "Members",
-      buildMemberRow({
-        reference: ref,
-        provider: "squad",
-        name: meta.name || pending?.name || data.email,
-        email: data.email,
-        phone: meta.phone || pending?.phone,
-        role: meta.role || pending?.role,
-        businessName: meta.businessName || pending?.businessName,
-        plan: planKey || "unknown",
-        amountPaid: data.transaction_amount / 100,
-      })
-    );
+    const memberName = meta.name || pending?.name || data.email;
+    const { row, renewalDate } = buildMemberRow({
+      reference: ref,
+      provider: "squad",
+      name: memberName,
+      email: data.email,
+      phone: meta.phone || pending?.phone,
+      role: meta.role || pending?.role,
+      businessName: meta.businessName || pending?.businessName,
+      plan: planKey || "unknown",
+      amountPaid: data.transaction_amount / 100,
+    });
+    await appendRow("Members", row);
+    await notifyNewMember({ email: data.email, name: memberName, plan: planKey, provider: "Squad", renewalDate });
 
     pendingSquadSignups.delete(ref);
     res.json({ success: true, email: data.email });
@@ -271,20 +284,20 @@ app.post("/api/squad/webhook", express.raw({ type: "application/json" }), async 
           (key) => Math.round(PLANS[key].amountNaira * 100) === body.amount
         );
 
-        await appendRow(
-          "Members",
-          buildMemberRow({
-            reference: ref,
-            provider: "squad",
-            name: meta.name || pending?.name || body.email,
-            email: body.email,
-            phone: meta.phone || pending?.phone,
-            role: meta.role || pending?.role,
-            businessName: meta.businessName || pending?.businessName,
-            plan: planKey || "unknown",
-            amountPaid: body.amount / 100,
-          })
-        );
+        const memberName = meta.name || pending?.name || body.email;
+        const { row, renewalDate } = buildMemberRow({
+          reference: ref,
+          provider: "squad",
+          name: memberName,
+          email: body.email,
+          phone: meta.phone || pending?.phone,
+          role: meta.role || pending?.role,
+          businessName: meta.businessName || pending?.businessName,
+          plan: planKey || "unknown",
+          amountPaid: body.amount / 100,
+        });
+        await appendRow("Members", row);
+        await notifyNewMember({ email: body.email, name: memberName, plan: planKey, provider: "Squad", renewalDate });
         pendingSquadSignups.delete(ref);
       }
     }

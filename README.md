@@ -21,8 +21,9 @@ database, no password auth — just enough to validate the idea.
     pay again through the same flow. (Squad does support card tokenization
     + an on-demand `charge_card` call, which could power real auto-renewal
     later — not built here to keep the MVP scope small.)
-  Either path verifies the payment server-side and appends a row to
-  `Members` with which `PaymentProvider` was used.
+  Either path verifies the payment server-side, appends a row to `Members`
+  with which `PaymentProvider` was used, and emails the member a
+  confirmation.
 - **Access is gated by email**, not a password. A visitor who subscribed (or
   who looks up their email on `/account.html`) has their email saved in
   `localStorage`; the brand pages send that email to the API, which checks the
@@ -57,6 +58,11 @@ correct headers) automatically if they don't already exist:
      Keys) and, optionally, `SQUAD_BASE_URL` if you're going live.
    - `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`
      from a Google Cloud service account with the Sheets API enabled.
+   - `SMTP_USER` (a Gmail address) and `SMTP_PASS` — not your normal Gmail
+     password, a 16-character **App Password**. Turn on 2-Step Verification
+     on that Google account first, then generate one at
+     myaccount.google.com/apppasswords. Without this, subscriptions still
+     work — the server just logs a warning and skips the email.
 2. `npm install`
 3. `npm run seed` — creates the sheet tabs if missing, then pushes sample
    brands/products in so you have something to click through immediately.
