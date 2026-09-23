@@ -43,7 +43,7 @@ app.get("/api/config", (req, res) => {
     plans: Object.fromEntries(
       Object.entries(PLANS).map(([key, p]) => [
         key,
-        { name: p.name, amountNaira: p.amountNaira, code: p.code },
+        { name: p.name, amountNaira: p.amountNaira, period: p.period || "month", code: p.code },
       ])
     ),
   });
@@ -74,10 +74,14 @@ async function memberExistsWithReference(reference) {
   return members.some((m) => m.PaymentReference === reference);
 }
 
-function buildMemberRow({ reference, provider, name, email, phone, role, businessName, plan, amountPaid }) {
+function buildMemberRow({ reference, provider, name, email, phone, role, businessName, plan, amountPaid, referredBy }) {
   const startDate = new Date();
   const renewalDate = new Date(startDate);
-  renewalDate.setMonth(renewalDate.getMonth() + 1);
+  if (PLANS[plan]?.period === "year") {
+    renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+  } else {
+    renewalDate.setMonth(renewalDate.getMonth() + 1);
+  }
   const renewalDateStr = renewalDate.toISOString().split("T")[0];
 
   const row = {
@@ -94,6 +98,7 @@ function buildMemberRow({ reference, provider, name, email, phone, role, busines
     Status: "Active",
     PaymentProvider: provider,
     PaymentReference: reference,
+    ReferredBy: referredBy || "",
   };
 
   return { row, renewalDate: renewalDateStr };
@@ -157,14 +162,27 @@ app.get("/api/brands/:slug/products", async (req, res) => {
       .map((p) => {
         const isFreeSample = (p.FreeAccess || "").toLowerCase() === "true";
         const unlocked = isPaidMember || (isFreeMember && isFreeSample);
+        const retailPrice = Number(p.RetailPrice) || 0;
+        const memberPrice = Number(p.MemberPrice) || 0;
+
+        // Shown to everyone (even locked out) as a conversion hook, but
+        // bucketed to the nearest 5% rather than exact — the retail price is
+        // already public, so an exact percentage would let anyone back out
+        // the precise member price without signing up.
+        const savingsPercent =
+          retailPrice > 0 && memberPrice > 0 && memberPrice < retailPrice
+            ? Math.round((1 - memberPrice / retailPrice) * 20) * 5
+            : null;
+
         return {
           id: p.ProductID,
           name: p.Name,
           category: p.Category,
           imageUrl: p.ImageURL,
           description: p.Description,
-          retailPrice: Number(p.RetailPrice) || 0,
-          memberPrice: unlocked ? Number(p.MemberPrice) || 0 : null,
+          retailPrice,
+          memberPrice: unlocked ? memberPrice : null,
+          savingsPercent,
         };
       });
 
@@ -178,7 +196,7 @@ app.get("/api/brands/:slug/products", async (req, res) => {
 // ---- Subscription / membership ----
 
 app.post("/api/subscribe/verify", express.json(), async (req, res) => {
-  const { reference, name, email, phone, role, businessName, plan } = req.body;
+  const { reference, name, email, phone, role, businessName, plan, referredBy } = req.body;
 
   if (!reference || !name || !email || !plan || !PLANS[plan]) {
     return res.status(400).json({ success: false, error: "Missing or invalid fields" });
@@ -205,6 +223,7 @@ app.post("/api/subscribe/verify", express.json(), async (req, res) => {
       businessName,
       plan,
       amountPaid: verification.data.amount / 100,
+      referredBy,
     });
     await appendRow("Members", row);
     notifyNewMember({ email, name, plan, provider: "Paystack", renewalDate }); // fire-and-forget: SMTP shouldn't block a paid response
@@ -221,7 +240,7 @@ app.post("/api/subscribe/verify", express.json(), async (req, res) => {
 // email that's already an active member (free or paid) is a no-op success
 // rather than a duplicate row.
 app.post("/api/subscribe/free", express.json(), async (req, res) => {
-  const { name, email, phone, role, businessName } = req.body;
+  const { name, email, phone, role, businessName, referredBy } = req.body;
 
   if (!name || !email) {
     return res.status(400).json({ success: false, error: "Name and email are required" });
@@ -250,6 +269,7 @@ app.post("/api/subscribe/free", express.json(), async (req, res) => {
       businessName,
       plan: "free",
       amountPaid: 0,
+      referredBy,
     });
     await appendRow("Members", row);
     notifyNewMember({ email, name, plan: "free", provider: "Free", renewalDate }); // fire-and-forget
@@ -264,14 +284,14 @@ app.post("/api/subscribe/free", express.json(), async (req, res) => {
 // ---- Squad: hosted checkout redirect flow ----
 
 app.post("/api/subscribe/squad/initiate", express.json(), async (req, res) => {
-  const { name, email, phone, role, businessName, plan } = req.body;
+  const { name, email, phone, role, businessName, plan, referredBy } = req.body;
 
   if (!name || !email || !plan || !PLANS[plan]) {
     return res.status(400).json({ success: false, error: "Missing or invalid fields" });
   }
 
   const transactionRef = `SQ-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  pendingSquadSignups.set(transactionRef, { name, email, phone, role, businessName, plan });
+  pendingSquadSignups.set(transactionRef, { name, email, phone, role, businessName, plan, referredBy });
 
   try {
     const callbackUrl = `${req.protocol}://${req.get("host")}/squad-callback.html?transaction_ref=${transactionRef}`;
@@ -280,7 +300,7 @@ app.post("/api/subscribe/squad/initiate", express.json(), async (req, res) => {
       amountNaira: PLANS[plan].amountNaira,
       transactionRef,
       callbackUrl,
-      metadata: { name, phone, role, businessName, plan },
+      metadata: { name, phone, role, businessName, plan, referredBy },
     });
 
     res.json({ success: true, checkoutUrl: result.data.checkout_url });
@@ -331,6 +351,7 @@ app.get("/api/subscribe/squad/verify", async (req, res) => {
       businessName: meta.businessName || pending?.businessName,
       plan: planKey || "unknown",
       amountPaid: data.transaction_amount / 100,
+      referredBy: meta.referredBy || pending?.referredBy,
     });
     await appendRow("Members", row);
     notifyNewMember({ email: data.email, name: memberName, plan: planKey, provider: "Squad", renewalDate }); // fire-and-forget
@@ -379,6 +400,7 @@ app.post("/api/squad/webhook", express.raw({ type: "application/json" }), async 
           businessName: meta.businessName || pending?.businessName,
           plan: planKey || "unknown",
           amountPaid: body.amount / 100,
+          referredBy: meta.referredBy || pending?.referredBy,
         });
         await appendRow("Members", row);
         notifyNewMember({ email: body.email, name: memberName, plan: planKey, provider: "Squad", renewalDate }); // fire-and-forget

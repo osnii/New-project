@@ -40,6 +40,7 @@ const MEMBERS_HEADER = [
   "Status",
   "PaymentProvider",
   "PaymentReference",
+  "ReferredBy",
 ];
 
 const EVENTS_HEADER = ["Timestamp", "Event", "Email", "Plan", "BrandSlug", "Provider", "Detail"];

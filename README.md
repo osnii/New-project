@@ -11,7 +11,9 @@ database, no password auth — just enough to validate the idea.
   `Brands`, `Products`, `Members`. Add/edit brands and products by editing the
   sheet directly; the `Members` tab fills up automatically as people subscribe.
 - **Two payment options at checkout: Paystack or Squad.** Three plan tiers
-  (Basic/Pro/Elite) either way. They work differently under the hood:
+  (Basic/Pro/Elite), each with a monthly and an annual price (annual is 10x
+  monthly — 2 months free, an untested starting guess, not settled pricing)
+  either way. They work differently under the hood:
   - **Paystack** auto-bills the member's card every month on its own (its
     "Plan" feature) — no extra work from us after signup.
   - **Squad has no equivalent auto-billing plan.** Checkout is a one-off
@@ -46,7 +48,14 @@ correct headers) automatically if they don't already exist:
 
 **Products** (`Category` here is the product's category within its brand,
 e.g. "Televisions" — unrelated to the brand's own Category above)
-`ProductID | BrandSlug | Name | Category | RetailPrice | MemberPrice | ImageURL | Description | Active`
+`ProductID | BrandSlug | Name | Category | RetailPrice | MemberPrice | BuyPrice | Supplier | GrossProfit | ImageURL | Description | Active | FreeAccess`
+
+`BuyPrice`, `Supplier`, and `GrossProfit` are for your own cost/margin
+tracking — the app never reads or exposes them; they're not part of the API
+response. Fill them in as you lock down real supplier pricing. `FreeAccess`
+(`TRUE`/`FALSE`) marks a small curated sample that no-payment "Free" members
+(see `/api/subscribe/free`) can see at member pricing — everything else stays
+locked for them to nudge the upgrade to a paid plan.
 
 **Members** (the backend writes to this one as people subscribe)
 `MemberID | Name | Email | Phone | Role | BusinessName | Plan | AmountPaid | StartDate | RenewalDate | Status | PaymentProvider | PaymentReference`
@@ -54,8 +63,9 @@ e.g. "Televisions" — unrelated to the brand's own Category above)
 ## Setup
 
 1. `cp .env.example .env` and fill in:
-   - Paystack public/secret keys and the three plan codes (create the plans
-     under Paystack Dashboard → Payments → Plans first).
+   - Paystack public/secret keys and the six plan codes — monthly and annual
+     for each tier (create the plans under Paystack Dashboard → Payments →
+     Plans first).
    - `SQUAD_SECRET_KEY` (sandbox key from Squad Dashboard → Settings → API
      Keys) and, optionally, `SQUAD_BASE_URL` if you're going live.
    - `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`

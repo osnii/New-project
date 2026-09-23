@@ -24,8 +24,9 @@
       <h2 id="brandHeading">Products</h2>
       <p class="section-subtitle" id="lockedNotice" style="display: none">
         Retail prices are shown below. <a href="/#pricing">Subscribe</a> or
-        <a href="/account.html">sign in</a> to see member wholesale pricing.
+        <a href="/account.html">sign in</a> to see member pricing.
       </p>
+      <p class="price-validity-note">Prices shown are reconfirmed with you before payment is taken.</p>
       <div id="productGrid" class="product-grid">
         <p class="empty-state">Loading products…</p>
       </div>
@@ -81,11 +82,14 @@
 
         grid.innerHTML = data.products
           .map((p) => {
+            const lockedHint = p.savingsPercent
+              ? `<span class="locked-price">Save ~${p.savingsPercent}% — sign in to see price</span>`
+              : `<span class="locked-price">Member price locked</span>`;
             const priceHtml = p.memberPrice
               ? `<span class="retail-price">₦${p.retailPrice.toLocaleString()}</span>
                  <span class="member-price">₦${p.memberPrice.toLocaleString()}</span>`
               : `<span class="retail-price">₦${p.retailPrice.toLocaleString()}</span>
-                 <span class="locked-price">Member price locked</span>`;
+                 ${lockedHint}`;
 
             return `
               <div class="product-card">

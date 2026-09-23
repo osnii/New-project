@@ -48,6 +48,36 @@ function setStoredMemberEmail(email) {
   }
 }
 
+// Monthly/annual pricing toggle on the homepage. A bare tier name ("basic")
+// resolves to "basic_annual" when Annual is selected; an already-specific
+// key (e.g. from a direct link) passes through unchanged.
+let selectedBillingPeriod = "month";
+const PLAN_TIERS = ["basic", "pro", "elite"];
+
+function resolvePlanKey(tier) {
+  return selectedBillingPeriod === "year" && PLAN_TIERS.includes(tier) ? `${tier}_annual` : tier;
+}
+
+function setBillingPeriod(period) {
+  selectedBillingPeriod = period;
+  document.querySelectorAll(".toggle-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.period === period);
+  });
+  renderPlanCardPrices();
+}
+
+function renderPlanCardPrices() {
+  getConfig().then((config) => {
+    document.querySelectorAll("[data-plan-tier]").forEach((card) => {
+      const tier = card.dataset.planTier;
+      const plan = config.plans[resolvePlanKey(tier)];
+      if (!plan) return;
+      const suffix = plan.period === "year" ? "/yr" : "/mo";
+      card.querySelector(".plan-price").innerHTML = `₦${plan.amountNaira.toLocaleString()}<span>${suffix}</span>`;
+    });
+  });
+}
+
 function openSubscribeModal(planKey) {
   getConfig().then((config) => {
     const plan = config.plans[planKey];
@@ -56,7 +86,8 @@ function openSubscribeModal(planKey) {
     trackEvent("open_subscribe", { plan: planKey });
     document.getElementById("modalPlanKey").value = planKey;
     document.getElementById("modalPlanName").textContent = `${plan.name} Plan`;
-    document.getElementById("modalPlanPrice").textContent = `₦${plan.amountNaira.toLocaleString()}/month`;
+    const suffix = plan.period === "year" ? "/year" : "/month";
+    document.getElementById("modalPlanPrice").textContent = `₦${plan.amountNaira.toLocaleString()}${suffix}`;
     document.getElementById("subscriptionModal").classList.add("open");
   });
 }
@@ -74,6 +105,7 @@ async function handleSubscriptionSubmit(event) {
   const phone = document.getElementById("userPhone").value.trim();
   const role = document.getElementById("userRole").value;
   const businessName = document.getElementById("userBusinessName").value.trim();
+  const referredBy = document.getElementById("userReferredBy").value.trim();
   // ":checked" only matches radio/checkbox inputs, so when Paystack's radio
   // is commented out in favor of a plain hidden input, fall back to reading
   // that instead.
@@ -82,7 +114,7 @@ async function handleSubscriptionSubmit(event) {
     document.querySelector('input[name="paymentProvider"]');
   const provider = providerInput?.value || "squad";
 
-  const signupDetails = { name, email, phone, role, businessName, plan: planKey };
+  const signupDetails = { name, email, phone, role, businessName, referredBy, plan: planKey };
 
   if (provider === "squad") {
     await paySubscriptionWithSquad(signupDetails);
@@ -91,7 +123,7 @@ async function handleSubscriptionSubmit(event) {
   }
 }
 
-async function paySubscriptionWithSquad({ name, email, phone, role, businessName, plan: planKey }) {
+async function paySubscriptionWithSquad({ name, email, phone, role, businessName, referredBy, plan: planKey }) {
   const continueBtn = document.getElementById("continueBtn");
   const originalText = continueBtn.textContent;
   continueBtn.textContent = "Redirecting...";
@@ -103,7 +135,7 @@ async function paySubscriptionWithSquad({ name, email, phone, role, businessName
     const res = await fetch("/api/subscribe/squad/initiate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, phone, role, businessName, plan: planKey }),
+      body: JSON.stringify({ name, email, phone, role, businessName, referredBy, plan: planKey }),
     });
     const data = await res.json();
 
@@ -122,7 +154,7 @@ async function paySubscriptionWithSquad({ name, email, phone, role, businessName
   }
 }
 
-async function paySubscriptionWithPaystack({ name, email, phone, role, businessName, plan: planKey }) {
+async function paySubscriptionWithPaystack({ name, email, phone, role, businessName, referredBy, plan: planKey }) {
   const config = await getConfig();
   const plan = config.plans[planKey];
   if (!plan || !plan.code) {
@@ -142,7 +174,7 @@ async function paySubscriptionWithPaystack({ name, email, phone, role, businessN
     email,
     plan: plan.code,
     currency: "NGN",
-    metadata: { name, phone, role, businessName, plan: planKey },
+    metadata: { name, phone, role, businessName, referredBy, plan: planKey },
     callback: function (response) {
       fetch("/api/subscribe/verify", {
         method: "POST",
@@ -154,6 +186,7 @@ async function paySubscriptionWithPaystack({ name, email, phone, role, businessN
           phone,
           role,
           businessName,
+          referredBy,
           plan: planKey,
         }),
       })
@@ -199,6 +232,7 @@ async function handleFreeSignupSubmit(event) {
   const name = document.getElementById("freeUserName").value.trim();
   const email = document.getElementById("freeUserEmail").value.trim();
   const phone = document.getElementById("freeUserPhone").value.trim();
+  const referredBy = document.getElementById("freeUserReferredBy").value.trim();
 
   const btn = document.getElementById("freeContinueBtn");
   const originalText = btn.textContent;
@@ -211,7 +245,7 @@ async function handleFreeSignupSubmit(event) {
     const res = await fetch("/api/subscribe/free", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, phone, role: "customer" }),
+      body: JSON.stringify({ name, email, phone, role: "customer", referredBy }),
     });
     const data = await res.json();
 
@@ -290,4 +324,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const freeForm = document.getElementById("freeSignupForm");
   if (freeForm) freeForm.addEventListener("submit", handleFreeSignupSubmit);
+
+  if (document.querySelector("[data-plan-tier]")) renderPlanCardPrices();
 });
