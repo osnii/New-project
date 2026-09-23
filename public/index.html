@@ -62,6 +62,12 @@
       <p class="section-subtitle">Cancel anytime. Same pricing whether you're a customer or a contractor.</p>
       <div class="plans-grid">
         <div class="plan-card">
+          <h3>Free</h3>
+          <div class="plan-price">₦0<span>/mo</span></div>
+          <p class="desc">See real member pricing on a sample deal per brand — no payment.</p>
+          <button class="btn-secondary" onclick="openFreeSignupModal()">See Sample Deals</button>
+        </div>
+        <div class="plan-card">
           <h3>Basic</h3>
           <div class="plan-price">₦2,500<span>/mo</span></div>
           <p class="desc">20+ deals across brands, monthly price list.</p>
@@ -134,9 +140,40 @@
         </div>
         -->
         <input type="hidden" name="paymentProvider" value="squad" />
+        <p class="fulfillment-notice">
+          After payment, we'll reach out on WhatsApp or phone to complete your
+          first order — this isn't an instant checkout yet.
+        </p>
         <div class="modal-buttons">
           <button type="button" class="btn-cancel" onclick="closeSubscriptionModal()">Cancel</button>
           <button type="submit" class="btn-continue" id="continueBtn">Continue to Payment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Free Signup Modal -->
+  <div id="freeSignupModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeFreeSignupModal()">&times;</button>
+      <h2 class="modal-title">Free Access</h2>
+      <p class="modal-description">See real member pricing on a sample deal at each brand — no payment, no card.</p>
+      <form id="freeSignupForm">
+        <div class="form-group">
+          <label class="form-label" for="freeUserName">Full Name</label>
+          <input type="text" class="form-input" id="freeUserName" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="freeUserEmail">Email Address</label>
+          <input type="email" class="form-input" id="freeUserEmail" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="freeUserPhone">Phone Number (optional)</label>
+          <input type="tel" class="form-input" id="freeUserPhone" />
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-cancel" onclick="closeFreeSignupModal()">Cancel</button>
+          <button type="submit" class="btn-continue" id="freeContinueBtn">See Sample Deals</button>
         </div>
       </form>
     </div>

@@ -58,6 +58,7 @@
       document.getElementById("pageTitle").textContent = `${heading.textContent} - PriceEdge`;
 
       const email = getStoredMemberEmail();
+      trackEvent("view_brand", { brandSlug: slug, email });
       const url = `/api/brands/${encodeURIComponent(slug)}/products` + (email ? `?email=${encodeURIComponent(email)}` : "");
 
       try {

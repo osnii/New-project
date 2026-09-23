@@ -46,6 +46,7 @@
 
         if (data.success) {
           if (data.email) setStoredMemberEmail(data.email);
+          trackEvent("complete_signup", { plan: data.plan, provider: "squad", email: data.email });
           heading.textContent = "You're in!";
           message.textContent = "Your PriceEdge membership is active.";
           document.getElementById("continueLink").style.display = "inline-block";

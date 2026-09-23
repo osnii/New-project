@@ -17,6 +17,20 @@ function showToast(message) {
   setTimeout(() => toast.classList.remove("show"), 3500);
 }
 
+// Fire-and-forget funnel logging — never blocks the UI and never throws.
+function trackEvent(event, meta = {}) {
+  try {
+    fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event, ...meta }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // ignore — analytics should never break the page
+  }
+}
+
 function getStoredMemberEmail() {
   try {
     return localStorage.getItem("priceedge_member_email") || "";
@@ -39,6 +53,7 @@ function openSubscribeModal(planKey) {
     const plan = config.plans[planKey];
     if (!plan) return;
 
+    trackEvent("open_subscribe", { plan: planKey });
     document.getElementById("modalPlanKey").value = planKey;
     document.getElementById("modalPlanName").textContent = `${plan.name} Plan`;
     document.getElementById("modalPlanPrice").textContent = `₦${plan.amountNaira.toLocaleString()}/month`;
@@ -82,6 +97,8 @@ async function paySubscriptionWithSquad({ name, email, phone, role, businessName
   continueBtn.textContent = "Redirecting...";
   continueBtn.disabled = true;
 
+  trackEvent("start_checkout", { plan: planKey, provider: "squad", email });
+
   try {
     const res = await fetch("/api/subscribe/squad/initiate", {
       method: "POST",
@@ -118,6 +135,8 @@ async function paySubscriptionWithPaystack({ name, email, phone, role, businessN
   continueBtn.textContent = "Processing...";
   continueBtn.disabled = true;
 
+  trackEvent("start_checkout", { plan: planKey, provider: "paystack", email });
+
   const handler = PaystackPop.setup({
     key: config.paystackPublicKey,
     email,
@@ -142,6 +161,7 @@ async function paySubscriptionWithPaystack({ name, email, phone, role, businessN
         .then((data) => {
           if (data.success) {
             setStoredMemberEmail(email);
+            trackEvent("complete_signup", { plan: planKey, provider: "paystack", email });
             showToast("Welcome to PriceEdge! Your membership is active.");
             closeSubscriptionModal();
             setTimeout(() => window.location.assign("/brands.html"), 1200);
@@ -164,7 +184,58 @@ async function paySubscriptionWithPaystack({ name, email, phone, role, businessN
   handler.openIframe();
 }
 
+function openFreeSignupModal() {
+  trackEvent("open_subscribe", { plan: "free" });
+  document.getElementById("freeSignupModal").classList.add("open");
+}
+
+function closeFreeSignupModal() {
+  document.getElementById("freeSignupModal").classList.remove("open");
+}
+
+async function handleFreeSignupSubmit(event) {
+  event.preventDefault();
+
+  const name = document.getElementById("freeUserName").value.trim();
+  const email = document.getElementById("freeUserEmail").value.trim();
+  const phone = document.getElementById("freeUserPhone").value.trim();
+
+  const btn = document.getElementById("freeContinueBtn");
+  const originalText = btn.textContent;
+  btn.textContent = "Setting up...";
+  btn.disabled = true;
+
+  trackEvent("start_checkout", { plan: "free", provider: "free", email });
+
+  try {
+    const res = await fetch("/api/subscribe/free", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, phone, role: "customer" }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      setStoredMemberEmail(email);
+      trackEvent("complete_signup", { plan: "free", provider: "free", email });
+      showToast("You're in! Check your email, then browse brands.");
+      closeFreeSignupModal();
+      setTimeout(() => window.location.assign("/brands.html"), 1200);
+    } else {
+      showToast(data.error || "Couldn't set up free access.");
+    }
+  } catch {
+    showToast("Something went wrong. Try again shortly.");
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("subscriptionForm");
   if (form) form.addEventListener("submit", handleSubscriptionSubmit);
+
+  const freeForm = document.getElementById("freeSignupForm");
+  if (freeForm) freeForm.addEventListener("submit", handleFreeSignupSubmit);
 });

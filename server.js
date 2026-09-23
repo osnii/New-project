@@ -45,6 +45,26 @@ app.get("/api/config", (req, res) => {
   });
 });
 
+// Funnel instrumentation: fire-and-forget, never blocks or fails the caller.
+app.post("/api/track", express.json(), async (req, res) => {
+  const { event, email, plan, brandSlug, provider, detail } = req.body || {};
+  res.sendStatus(204);
+
+  try {
+    await appendRow("Events", {
+      Timestamp: new Date().toISOString(),
+      Event: event || "",
+      Email: email || "",
+      Plan: plan || "",
+      BrandSlug: brandSlug || "",
+      Provider: provider || "",
+      Detail: detail || "",
+    });
+  } catch (err) {
+    console.error("Error logging event:", err.message);
+  }
+});
+
 async function memberExistsWithReference(reference) {
   const members = await readRows("Members");
   return members.some((m) => m.PaymentReference === reference);
@@ -110,13 +130,19 @@ app.get("/api/brands/:slug/products", async (req, res) => {
       email ? readRows("Members") : Promise.resolve([]),
     ]);
 
-    const isActiveMember = email
-      ? members.some(
+    const activeMember = email
+      ? members.find(
           (m) =>
             (m.Email || "").toLowerCase() === String(email).toLowerCase() &&
             (m.Status || "").toLowerCase() === "active"
         )
-      : false;
+      : null;
+
+    // Free-tier members only get member pricing on products flagged
+    // FreeAccess=TRUE (a curated sample) — everything else stays locked to
+    // nudge the upgrade. Paid members unlock the whole catalog.
+    const isPaidMember = !!activeMember && activeMember.Plan !== "free";
+    const isFreeMember = !!activeMember && activeMember.Plan === "free";
 
     const brandProducts = products
       .filter(
@@ -124,17 +150,21 @@ app.get("/api/brands/:slug/products", async (req, res) => {
           (p.BrandSlug || "").toLowerCase() === slug.toLowerCase() &&
           (p.Active || "").toLowerCase() !== "false"
       )
-      .map((p) => ({
-        id: p.ProductID,
-        name: p.Name,
-        category: p.Category,
-        imageUrl: p.ImageURL,
-        description: p.Description,
-        retailPrice: Number(p.RetailPrice) || 0,
-        memberPrice: isActiveMember ? Number(p.MemberPrice) || 0 : null,
-      }));
+      .map((p) => {
+        const isFreeSample = (p.FreeAccess || "").toLowerCase() === "true";
+        const unlocked = isPaidMember || (isFreeMember && isFreeSample);
+        return {
+          id: p.ProductID,
+          name: p.Name,
+          category: p.Category,
+          imageUrl: p.ImageURL,
+          description: p.Description,
+          retailPrice: Number(p.RetailPrice) || 0,
+          memberPrice: unlocked ? Number(p.MemberPrice) || 0 : null,
+        };
+      });
 
-    res.json({ locked: !isActiveMember, products: brandProducts });
+    res.json({ locked: !isPaidMember, products: brandProducts });
   } catch (err) {
     console.error("Error reading products:", err.message);
     res.status(500).json({ error: "Could not load products" });
@@ -173,12 +203,57 @@ app.post("/api/subscribe/verify", express.json(), async (req, res) => {
       amountPaid: verification.data.amount / 100,
     });
     await appendRow("Members", row);
-    await notifyNewMember({ email, name, plan, provider: "Paystack", renewalDate });
+    notifyNewMember({ email, name, plan, provider: "Paystack", renewalDate }); // fire-and-forget: SMTP shouldn't block a paid response
 
     res.json({ success: true });
   } catch (err) {
     console.error("Error verifying payment:", err.response?.data || err.message);
     res.status(500).json({ success: false, error: "Verification failed" });
+  }
+});
+
+// No payment: just captures the lead and unlocks the small FreeAccess=TRUE
+// sample of products. Idempotent on email — re-signing up with the same
+// email that's already an active member (free or paid) is a no-op success
+// rather than a duplicate row.
+app.post("/api/subscribe/free", express.json(), async (req, res) => {
+  const { name, email, phone, role, businessName } = req.body;
+
+  if (!name || !email) {
+    return res.status(400).json({ success: false, error: "Name and email are required" });
+  }
+
+  try {
+    const members = await readRows("Members");
+    const alreadyActive = members.some(
+      (m) =>
+        (m.Email || "").toLowerCase() === email.toLowerCase() &&
+        (m.Status || "").toLowerCase() === "active"
+    );
+
+    if (alreadyActive) {
+      return res.json({ success: true });
+    }
+
+    const reference = `FREE-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { row, renewalDate } = buildMemberRow({
+      reference,
+      provider: "free",
+      name,
+      email,
+      phone,
+      role,
+      businessName,
+      plan: "free",
+      amountPaid: 0,
+    });
+    await appendRow("Members", row);
+    notifyNewMember({ email, name, plan: "free", provider: "Free", renewalDate }); // fire-and-forget
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error creating free signup:", err.message);
+    res.status(500).json({ success: false, error: "Could not complete signup" });
   }
 });
 
@@ -254,10 +329,10 @@ app.get("/api/subscribe/squad/verify", async (req, res) => {
       amountPaid: data.transaction_amount / 100,
     });
     await appendRow("Members", row);
-    await notifyNewMember({ email: data.email, name: memberName, plan: planKey, provider: "Squad", renewalDate });
+    notifyNewMember({ email: data.email, name: memberName, plan: planKey, provider: "Squad", renewalDate }); // fire-and-forget
 
     pendingSquadSignups.delete(ref);
-    res.json({ success: true, email: data.email });
+    res.json({ success: true, email: data.email, plan: planKey });
   } catch (err) {
     console.error("Error verifying Squad payment:", err.response?.data || err.message);
     res.status(500).json({ success: false, error: "Verification failed" });
@@ -302,7 +377,7 @@ app.post("/api/squad/webhook", express.raw({ type: "application/json" }), async 
           amountPaid: body.amount / 100,
         });
         await appendRow("Members", row);
-        await notifyNewMember({ email: body.email, name: memberName, plan: planKey, provider: "Squad", renewalDate });
+        notifyNewMember({ email: body.email, name: memberName, plan: planKey, provider: "Squad", renewalDate }); // fire-and-forget
         pendingSquadSignups.delete(ref);
       }
     }

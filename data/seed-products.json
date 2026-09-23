@@ -8,7 +8,8 @@
     "MemberPrice": "245000",
     "ImageURL": "",
     "Description": "43-inch 4K UHD Smart TV.",
-    "Active": "TRUE"
+    "Active": "TRUE",
+    "FreeAccess": "TRUE"
   },
   {
     "ProductID": "P002",
@@ -19,7 +20,8 @@
     "MemberPrice": "195000",
     "ImageURL": "",
     "Description": "300-litre double door refrigerator.",
-    "Active": "TRUE"
+    "Active": "TRUE",
+    "FreeAccess": "FALSE"
   },
   {
     "ProductID": "P003",
@@ -30,7 +32,8 @@
     "MemberPrice": "235000",
     "ImageURL": "",
     "Description": "43-inch 4K UHD Smart TV.",
-    "Active": "TRUE"
+    "Active": "TRUE",
+    "FreeAccess": "FALSE"
   },
   {
     "ProductID": "P004",
@@ -41,6 +44,7 @@
     "MemberPrice": "265000",
     "ImageURL": "",
     "Description": "Noise-cancelling wireless headphones.",
-    "Active": "TRUE"
+    "Active": "TRUE",
+    "FreeAccess": "TRUE"
   }
 ]

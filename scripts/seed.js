@@ -42,6 +42,18 @@ const MEMBERS_HEADER = [
   "PaymentReference",
 ];
 
+const EVENTS_HEADER = ["Timestamp", "Event", "Email", "Plan", "BrandSlug", "Provider", "Detail"];
+
+const CONTRACTOR_LEADS_HEADER = [
+  "Timestamp",
+  "Name",
+  "Email",
+  "Phone",
+  "BusinessName",
+  "Message",
+  "Status",
+];
+
 function readJson(fileName) {
   return JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", fileName), "utf8"));
 }
@@ -103,10 +115,12 @@ async function writeTab(tabName, rows) {
 }
 
 async function main() {
-  await ensureTabsExist(["Brands", "Products", "Members"]);
+  await ensureTabsExist(["Brands", "Products", "Members", "Events", "ContractorLeads"]);
   await writeTab("Brands", readJson("seed-brands.json"));
   await writeTab("Products", readJson("seed-products.json"));
   await writeHeaderIfEmpty("Members", MEMBERS_HEADER);
+  await writeHeaderIfEmpty("Events", EVENTS_HEADER);
+  await writeHeaderIfEmpty("ContractorLeads", CONTRACTOR_LEADS_HEADER);
   console.log("Done.");
 }
 

@@ -275,9 +275,9 @@ section h2 {
 /* Plans */
 .plans-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 20px;
-  max-width: 900px;
+  max-width: 1080px;
   margin: 0 auto;
 }
 
@@ -389,6 +389,16 @@ section h2 {
   border: 1px solid var(--border);
   border-radius: 10px;
   font-size: 14px;
+}
+
+.fulfillment-notice {
+  font-size: 12.5px;
+  color: var(--gray);
+  background: var(--bg-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 14px;
+  line-height: 1.4;
 }
 
 .modal-buttons {
