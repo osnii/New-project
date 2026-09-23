@@ -232,9 +232,61 @@ async function handleFreeSignupSubmit(event) {
   }
 }
 
+function openContractorLeadModal() {
+  trackEvent("open_subscribe", { plan: "contractor_lead" });
+  document.getElementById("contractorLeadModal").classList.add("open");
+}
+
+function closeContractorLeadModal() {
+  document.getElementById("contractorLeadModal").classList.remove("open");
+}
+
+async function handleContractorLeadSubmit(event) {
+  event.preventDefault();
+
+  const name = document.getElementById("leadName").value.trim();
+  const email = document.getElementById("leadEmail").value.trim();
+  const phone = document.getElementById("leadPhone").value.trim();
+  const businessName = document.getElementById("leadBusinessName").value.trim();
+  const message = document.getElementById("leadMessage").value.trim();
+
+  const btn = document.getElementById("leadContinueBtn");
+  const originalText = btn.textContent;
+  btn.textContent = "Sending...";
+  btn.disabled = true;
+
+  trackEvent("start_checkout", { plan: "contractor_lead", provider: "lead", email });
+
+  try {
+    const res = await fetch("/api/contractor-lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, phone, businessName, message }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      trackEvent("complete_signup", { plan: "contractor_lead", provider: "lead", email });
+      showToast("Request sent — we'll be in touch within 24 hours.");
+      closeContractorLeadModal();
+      event.target.reset();
+    } else {
+      showToast(data.error || "Couldn't send your request.");
+    }
+  } catch {
+    showToast("Something went wrong. Try again shortly.");
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("subscriptionForm");
   if (form) form.addEventListener("submit", handleSubscriptionSubmit);
+
+  const leadForm = document.getElementById("contractorLeadForm");
+  if (leadForm) leadForm.addEventListener("submit", handleContractorLeadSubmit);
 
   const freeForm = document.getElementById("freeSignupForm");
   if (freeForm) freeForm.addEventListener("submit", handleFreeSignupSubmit);

@@ -16,7 +16,11 @@ import {
   verifyTransaction as verifySquadTransaction,
   isValidWebhookSignature as isValidSquadSignature,
 } from "./lib/squad.js";
-import { sendSubscriptionConfirmation } from "./lib/email.js";
+import {
+  sendSubscriptionConfirmation,
+  sendContractorLeadConfirmation,
+  notifyAdminOfContractorLead,
+} from "./lib/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -445,6 +449,37 @@ app.get("/api/account", async (req, res) => {
   } catch (err) {
     console.error("Error reading account:", err.message);
     res.status(500).json({ error: "Could not load account" });
+  }
+});
+
+// ---- Contractor / wholesale distributor leads (no payment, no plan) ----
+
+app.post("/api/contractor-lead", express.json(), async (req, res) => {
+  const { name, email, phone, businessName, message } = req.body;
+
+  if (!name || !email) {
+    return res.status(400).json({ success: false, error: "Name and email are required" });
+  }
+
+  try {
+    await appendRow("ContractorLeads", {
+      Timestamp: new Date().toISOString(),
+      Name: name,
+      Email: email,
+      Phone: phone || "",
+      BusinessName: businessName || "",
+      Message: message || "",
+      Status: "New",
+    });
+
+    res.json({ success: true });
+
+    // Fire-and-forget — the lead is already recorded either way.
+    sendContractorLeadConfirmation({ to: email, name });
+    notifyAdminOfContractorLead({ name, email, phone, businessName, message });
+  } catch (err) {
+    console.error("Error recording contractor lead:", err.message);
+    res.status(500).json({ success: false, error: "Could not submit request" });
   }
 });
 

@@ -89,6 +89,17 @@
     </div>
   </section>
 
+  <section id="wholesale" style="text-align: center">
+    <div class="container">
+      <h2>Buying in bulk for a business or site?</h2>
+      <p class="section-subtitle">
+        Contractors and wholesale distributors get a quote, not a subscription —
+        tell us what you need and we'll get back to you within 24 hours.
+      </p>
+      <button class="btn-secondary" onclick="openContractorLeadModal()">Request a Quote</button>
+    </div>
+  </section>
+
   <footer>
     <div class="container">&copy; <span id="year"></span> PriceEdge. All rights reserved.</div>
   </footer>
@@ -174,6 +185,41 @@
         <div class="modal-buttons">
           <button type="button" class="btn-cancel" onclick="closeFreeSignupModal()">Cancel</button>
           <button type="submit" class="btn-continue" id="freeContinueBtn">See Sample Deals</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Contractor / Wholesale Lead Modal -->
+  <div id="contractorLeadModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeContractorLeadModal()">&times;</button>
+      <h2 class="modal-title">Request a Quote</h2>
+      <p class="modal-description">Tell us what you need — we'll reach out within 24 hours with pricing.</p>
+      <form id="contractorLeadForm">
+        <div class="form-group">
+          <label class="form-label" for="leadName">Full Name</label>
+          <input type="text" class="form-input" id="leadName" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="leadEmail">Email Address</label>
+          <input type="email" class="form-input" id="leadEmail" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="leadPhone">Phone Number</label>
+          <input type="tel" class="form-input" id="leadPhone" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="leadBusinessName">Business Name</label>
+          <input type="text" class="form-input" id="leadBusinessName" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="leadMessage">What do you need?</label>
+          <textarea class="form-input" id="leadMessage" rows="3" placeholder="Brands, quantities, timeline..."></textarea>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-cancel" onclick="closeContractorLeadModal()">Cancel</button>
+          <button type="submit" class="btn-continue" id="leadContinueBtn">Send Request</button>
         </div>
       </form>
     </div>
