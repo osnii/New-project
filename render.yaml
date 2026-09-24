@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: priceedge-mvp
+    runtime: node
+    plan: free
+    branch: claude/brand-subscription-marketplace-mvp-vfud8m
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PLAN_CODE_BASIC
+        sync: false
+      - key: PLAN_CODE_PRO
+        sync: false
+      - key: PLAN_CODE_ELITE
+        sync: false
+      - key: PLAN_CODE_BASIC_ANNUAL
+        sync: false
+      - key: PLAN_CODE_PRO_ANNUAL
+        sync: false
+      - key: PLAN_CODE_ELITE_ANNUAL
+        sync: false
+      - key: SQUAD_SECRET_KEY
+        sync: false
+      - key: SQUAD_BASE_URL
+        sync: false
+      - key: GOOGLE_SHEET_ID
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: SMTP_ALLOW_SELF_SIGNED
+        sync: false
+      - key: REFERRAL_REWARD_NAIRA
+        sync: false
+      - key: PRICE_LOCK_DAYS
+        sync: false

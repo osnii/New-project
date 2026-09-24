@@ -103,6 +103,34 @@ increase, never costs them a decrease you made in the meantime.
    `https://<your-host>/api/paystack/webhook`, and a Squad webhook at
    `https://<your-host>/api/squad/webhook`.
 
+## Deploying it somewhere you can view from any device
+
+Running `npm run dev` only serves `http://localhost:5000` on the machine
+that ran it — nobody else can open that URL. To get a real `https://` link
+you (or anyone) can open from any computer or phone:
+
+1. Push this repo to GitHub (already done if you're reading this from the
+   repo) and sign up at [render.com](https://render.com) (free tier works).
+2. **New +** → **Blueprint** → connect this repo. Render reads `render.yaml`
+   at the repo root and pre-creates the web service and its list of
+   required environment variables (this repo doesn't ship real values —
+   only Paystack/Squad keys you already have and known-safe defaults, e.g.
+   `SQUAD_BASE_URL`, `REFERRAL_REWARD_NAIRA`, are ever meant to be
+   committed to git, and neither is).
+3. Fill in each environment variable with the same real values from your
+   local `.env`. For `GOOGLE_PRIVATE_KEY`, paste it exactly as it appears in
+   `.env` — as one line with literal `\n` sequences — not as an actual
+   multi-line paste; the app un-escapes it at startup.
+4. Once it deploys, set `APP_BASE_URL` to the `https://*.onrender.com` URL
+   Render assigns you (used in the confirmation email's "browse brands"
+   link) — this triggers one more auto-redeploy.
+5. Free-tier Render services spin down after ~15 minutes idle and take
+   30-60 seconds to wake back up on the next request — expect a slow first
+   load, not a broken one.
+
+The Google Sheet stays the single source of truth either way — this just
+moves where the Node process itself runs, from your machine to Render's.
+
 ## What's intentionally missing (by design, for an MVP)
 
 - No password login — email lookup only (see above).
