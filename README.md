@@ -58,7 +58,22 @@ response. Fill them in as you lock down real supplier pricing. `FreeAccess`
 locked for them to nudge the upgrade to a paid plan.
 
 **Members** (the backend writes to this one as people subscribe)
-`MemberID | Name | Email | Phone | Role | BusinessName | Plan | AmountPaid | StartDate | RenewalDate | Status | PaymentProvider | PaymentReference`
+`MemberID | Name | Email | Phone | Role | BusinessName | Plan | AmountPaid | StartDate | RenewalDate | Status | PaymentProvider | PaymentReference | ReferredBy | ReferralCount | ReferralCredits`
+
+`ReferredBy` is whatever the signup form's "Referred by" field held — often a
+friend's name, not their email. `ReferralCount`/`ReferralCredits` only get
+credited automatically when it's an exact match to an existing member's
+email (a name can't be safely auto-matched) and the new signup is paid, not
+free. `ReferralCredits` is a running ledger in Naira, not a wallet — there's
+no discount-code system, so you redeem it manually against a member's order.
+
+**PriceLocks** (written when a member clicks "Lock this price" on a brand page)
+`LockID | Email | ProductID | BrandSlug | LockedPrice | LockedAt | ExpiresAt | Status`
+
+Freezes a product's current member price for that member for `PRICE_LOCK_DAYS`
+(default 14). While a lock is active, `/api/brands/:slug/products` shows them
+`min(locked price, current price)` — so it only ever protects them from an
+increase, never costs them a decrease you made in the meantime.
 
 ## Setup
 
@@ -75,6 +90,8 @@ locked for them to nudge the upgrade to a paid plan.
      on that Google account first, then generate one at
      myaccount.google.com/apppasswords. Without this, subscriptions still
      work — the server just logs a warning and skips the email.
+   - `REFERRAL_REWARD_NAIRA` (default 500) and `PRICE_LOCK_DAYS` (default 14)
+     — both optional, sensible defaults if you skip them.
 2. `npm install`
 3. `npm run seed` — creates the sheet tabs if missing, then pushes sample
    brands/products in so you have something to click through immediately.
@@ -102,6 +119,10 @@ locked for them to nudge the upgrade to a paid plan.
   actually placing an order still happens off-platform (WhatsApp, phone,
   etc.) until that's worth building.
 - No admin UI for managing brands/products — edit the Google Sheet directly.
+- Referral credits and price locks are ledger entries in the Sheet, not
+  enforced anywhere else — nothing stops you from forgetting to apply a
+  credit or honor a locked price when you actually fulfill an order
+  off-platform. Worth wiring into a real checkout once one exists.
 - Confirmation emails send via plain Gmail SMTP — fine for testing, but
   expect Spam-folder placement (no custom domain, no SPF/DKIM/DMARC
   reputation) and a ~500/day sending cap. Before a real launch, switch to a

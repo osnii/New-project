@@ -20,11 +20,14 @@ import {
   sendSubscriptionConfirmation,
   sendContractorLeadConfirmation,
   notifyAdminOfContractorLead,
+  notifyReferralReward,
 } from "./lib/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 5000;
+const REFERRAL_REWARD_NAIRA = Number(process.env.REFERRAL_REWARD_NAIRA) || 500;
+const PRICE_LOCK_DAYS = Number(process.env.PRICE_LOCK_DAYS) || 14;
 
 // Squad has no client-side checkout widget: the frontend redirects the
 // browser to a hosted page and Squad redirects back to our callback with a
@@ -40,6 +43,7 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/api/config", (req, res) => {
   res.json({
     paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY,
+    priceLockDays: PRICE_LOCK_DAYS,
     plans: Object.fromEntries(
       Object.entries(PLANS).map(([key, p]) => [
         key,
@@ -72,6 +76,25 @@ app.post("/api/track", express.json(), async (req, res) => {
 async function memberExistsWithReference(reference) {
   const members = await readRows("Members");
   return members.some((m) => m.PaymentReference === reference);
+}
+
+// Free-tier members only get member pricing on products flagged
+// FreeAccess=TRUE (a curated sample) — everything else stays locked to
+// nudge the upgrade. Paid members unlock the whole catalog.
+function computeMemberAccess(email, members) {
+  const activeMember = email
+    ? members.find(
+        (m) =>
+          (m.Email || "").toLowerCase() === String(email).toLowerCase() &&
+          (m.Status || "").toLowerCase() === "active"
+      )
+    : null;
+
+  return {
+    activeMember,
+    isPaidMember: !!activeMember && activeMember.Plan !== "free",
+    isFreeMember: !!activeMember && activeMember.Plan === "free",
+  };
 }
 
 function buildMemberRow({ reference, provider, name, email, phone, role, businessName, plan, amountPaid, referredBy }) {
@@ -116,6 +139,46 @@ async function notifyNewMember({ email, name, plan, provider, renewalDate }) {
   }
 }
 
+// Rewards an existing member when someone they referred completes a paid
+// signup. Only fires on an unambiguous match — `referredBy` must be the
+// referrer's exact member email, since a plain name typed into that field
+// can't be safely auto-matched — and only paid signups count, so a free
+// account can't be farmed for credit. Credits are a running ledger only;
+// there's no wallet/discount-code system, so they're redeemed manually
+// against an order like everything else in this MVP.
+async function creditReferralReward({ referredBy, newMemberEmail, amountPaid }) {
+  if (!referredBy || !amountPaid || !referredBy.includes("@")) return;
+  if (referredBy.toLowerCase() === newMemberEmail.toLowerCase()) return;
+
+  try {
+    const members = await readRows("Members");
+    const referrer = members.find(
+      (m) =>
+        (m.Email || "").toLowerCase() === referredBy.toLowerCase() &&
+        (m.Status || "").toLowerCase() === "active"
+    );
+    if (!referrer) return;
+
+    const newCount = (Number(referrer.ReferralCount) || 0) + 1;
+    const newCredits = (Number(referrer.ReferralCredits) || 0) + REFERRAL_REWARD_NAIRA;
+
+    await updateRowWhere(
+      "Members",
+      (m) => (m.Email || "").toLowerCase() === referredBy.toLowerCase(),
+      { ReferralCount: newCount, ReferralCredits: newCredits }
+    );
+
+    notifyReferralReward({
+      to: referrer.Email,
+      name: referrer.Name,
+      rewardAmount: REFERRAL_REWARD_NAIRA,
+      totalCredits: newCredits,
+    }); // fire-and-forget
+  } catch (err) {
+    console.error("Error crediting referral reward:", err.message);
+  }
+}
+
 // ---- Brands & products (Google Sheets as the catalog) ----
 
 app.get("/api/brands", async (req, res) => {
@@ -134,24 +197,29 @@ app.get("/api/brands/:slug/products", async (req, res) => {
   const { email } = req.query;
 
   try {
-    const [products, members] = await Promise.all([
+    const [products, members, priceLocks] = await Promise.all([
       readRows("Products"),
       email ? readRows("Members") : Promise.resolve([]),
+      email ? readRows("PriceLocks") : Promise.resolve([]),
     ]);
 
-    const activeMember = email
-      ? members.find(
-          (m) =>
-            (m.Email || "").toLowerCase() === String(email).toLowerCase() &&
-            (m.Status || "").toLowerCase() === "active"
-        )
-      : null;
+    const { isPaidMember, isFreeMember } = computeMemberAccess(email, members);
 
-    // Free-tier members only get member pricing on products flagged
-    // FreeAccess=TRUE (a curated sample) — everything else stays locked to
-    // nudge the upgrade. Paid members unlock the whole catalog.
-    const isPaidMember = !!activeMember && activeMember.Plan !== "free";
-    const isFreeMember = !!activeMember && activeMember.Plan === "free";
+    // Active, unexpired locks this visitor holds, keyed by product — used
+    // below to floor their price at what they locked in even if it's since
+    // gone up (see POST /api/price-lock).
+    const now = new Date();
+    const activeLocksByProduct = new Map();
+    if (email) {
+      priceLocks
+        .filter(
+          (l) =>
+            (l.Email || "").toLowerCase() === String(email).toLowerCase() &&
+            (l.Status || "").toLowerCase() === "active" &&
+            new Date(l.ExpiresAt) >= now
+        )
+        .forEach((l) => activeLocksByProduct.set(l.ProductID, l));
+    }
 
     const brandProducts = products
       .filter(
@@ -174,6 +242,9 @@ app.get("/api/brands/:slug/products", async (req, res) => {
             ? Math.round((1 - memberPrice / retailPrice) * 20) * 5
             : null;
 
+        const lock = unlocked ? activeLocksByProduct.get(p.ProductID) : null;
+        const effectivePrice = lock ? Math.min(Number(lock.LockedPrice) || memberPrice, memberPrice) : memberPrice;
+
         return {
           id: p.ProductID,
           name: p.Name,
@@ -181,8 +252,9 @@ app.get("/api/brands/:slug/products", async (req, res) => {
           imageUrl: p.ImageURL,
           description: p.Description,
           retailPrice,
-          memberPrice: unlocked ? memberPrice : null,
+          memberPrice: unlocked ? effectivePrice : null,
           savingsPercent,
+          priceLockExpiresAt: lock ? lock.ExpiresAt : null,
         };
       });
 
@@ -227,6 +299,7 @@ app.post("/api/subscribe/verify", express.json(), async (req, res) => {
     });
     await appendRow("Members", row);
     notifyNewMember({ email, name, plan, provider: "Paystack", renewalDate }); // fire-and-forget: SMTP shouldn't block a paid response
+    creditReferralReward({ referredBy, newMemberEmail: email, amountPaid: verification.data.amount / 100 }); // fire-and-forget
 
     res.json({ success: true });
   } catch (err) {
@@ -355,6 +428,11 @@ app.get("/api/subscribe/squad/verify", async (req, res) => {
     });
     await appendRow("Members", row);
     notifyNewMember({ email: data.email, name: memberName, plan: planKey, provider: "Squad", renewalDate }); // fire-and-forget
+    creditReferralReward({
+      referredBy: meta.referredBy || pending?.referredBy,
+      newMemberEmail: data.email,
+      amountPaid: data.transaction_amount / 100,
+    }); // fire-and-forget
 
     pendingSquadSignups.delete(ref);
     res.json({ success: true, email: data.email, plan: planKey });
@@ -404,6 +482,11 @@ app.post("/api/squad/webhook", express.raw({ type: "application/json" }), async 
         });
         await appendRow("Members", row);
         notifyNewMember({ email: body.email, name: memberName, plan: planKey, provider: "Squad", renewalDate }); // fire-and-forget
+        creditReferralReward({
+          referredBy: meta.referredBy || pending?.referredBy,
+          newMemberEmail: body.email,
+          amountPaid: body.amount / 100,
+        }); // fire-and-forget
         pendingSquadSignups.delete(ref);
       }
     }
@@ -446,6 +529,70 @@ app.post(
   }
 );
 
+// Lets a currently-unlocked member freeze today's member price on a product
+// for PRICE_LOCK_DAYS — protects them if the price rises before they order.
+// One active lock per email+product; re-locking an already-locked product
+// just returns the existing lock instead of resetting its expiry.
+app.post("/api/price-lock", express.json(), async (req, res) => {
+  const { email, productId } = req.body || {};
+  if (!email || !productId) {
+    return res.status(400).json({ success: false, error: "Email and productId are required" });
+  }
+
+  try {
+    const [members, products, priceLocks] = await Promise.all([
+      readRows("Members"),
+      readRows("Products"),
+      readRows("PriceLocks"),
+    ]);
+
+    const { isPaidMember, isFreeMember } = computeMemberAccess(email, members);
+    const product = products.find((p) => p.ProductID === productId);
+    if (!product) return res.status(404).json({ success: false, error: "Product not found" });
+
+    const isFreeSample = (product.FreeAccess || "").toLowerCase() === "true";
+    const unlocked = isPaidMember || (isFreeMember && isFreeSample);
+    if (!unlocked) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Subscribe to unlock this product's price before locking it" });
+    }
+
+    const now = new Date();
+    const existing = priceLocks.find(
+      (l) =>
+        (l.Email || "").toLowerCase() === email.toLowerCase() &&
+        l.ProductID === productId &&
+        (l.Status || "").toLowerCase() === "active" &&
+        new Date(l.ExpiresAt) >= now
+    );
+    if (existing) {
+      return res.json({ success: true, lockedPrice: Number(existing.LockedPrice), expiresAt: existing.ExpiresAt });
+    }
+
+    const expiresAt = new Date(now);
+    expiresAt.setDate(expiresAt.getDate() + PRICE_LOCK_DAYS);
+    const expiresAtStr = expiresAt.toISOString().split("T")[0];
+    const lockedPrice = Number(product.MemberPrice) || 0;
+
+    await appendRow("PriceLocks", {
+      LockID: `LOCK-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      Email: email,
+      ProductID: productId,
+      BrandSlug: product.BrandSlug || "",
+      LockedPrice: lockedPrice,
+      LockedAt: now.toISOString().split("T")[0],
+      ExpiresAt: expiresAtStr,
+      Status: "Active",
+    });
+
+    res.json({ success: true, lockedPrice, expiresAt: expiresAtStr });
+  } catch (err) {
+    console.error("Error locking price:", err.message);
+    res.status(500).json({ success: false, error: "Could not lock this price" });
+  }
+});
+
 app.get("/api/account", async (req, res) => {
   const { email } = req.query;
   if (!email) return res.status(400).json({ error: "Email is required" });
@@ -467,6 +614,8 @@ app.get("/api/account", async (req, res) => {
       status: member.Status,
       startDate: member.StartDate,
       renewalDate: member.RenewalDate,
+      referralCount: Number(member.ReferralCount) || 0,
+      referralCredits: Number(member.ReferralCredits) || 0,
     });
   } catch (err) {
     console.error("Error reading account:", err.message);

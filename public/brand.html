@@ -63,7 +63,7 @@
       const url = `/api/brands/${encodeURIComponent(slug)}/products` + (email ? `?email=${encodeURIComponent(email)}` : "");
 
       try {
-        const res = await fetch(url);
+        const [config, res] = await Promise.all([getConfig(), fetch(url)]);
         const data = await res.json();
 
         if (!res.ok) {
@@ -91,6 +91,12 @@
               : `<span class="retail-price">₦${p.retailPrice.toLocaleString()}</span>
                  ${lockedHint}`;
 
+            const priceLockHtml = p.priceLockExpiresAt
+              ? `<div class="price-lock-badge">🔒 Locked until ${p.priceLockExpiresAt}</div>`
+              : p.memberPrice
+              ? `<button type="button" class="price-lock-btn" onclick="lockPrice('${p.id}', this)">Lock this price for ${config.priceLockDays || 14} days</button>`
+              : "";
+
             return `
               <div class="product-card">
                 ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" />` : ""}
@@ -98,12 +104,48 @@
                   <h3>${p.name}</h3>
                   <div class="category">${p.category || ""}</div>
                   <div class="price-row">${priceHtml}</div>
+                  ${priceLockHtml}
                 </div>
               </div>`;
           })
           .join("");
       } catch {
         grid.innerHTML = '<p class="empty-state">Couldn\'t load products. Try again shortly.</p>';
+      }
+    }
+
+    async function lockPrice(productId, btn) {
+      const email = getStoredMemberEmail();
+      if (!email) {
+        showToast("Sign in with your member email first.");
+        return;
+      }
+
+      const originalText = btn.textContent;
+      btn.textContent = "Locking...";
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/price-lock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, productId }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          trackEvent("lock_price", { email, brandSlug: slug, detail: productId });
+          showToast(`Price locked until ${data.expiresAt}.`);
+          loadProducts();
+        } else {
+          showToast(data.error || "Couldn't lock this price.");
+          btn.textContent = originalText;
+          btn.disabled = false;
+        }
+      } catch {
+        showToast("Something went wrong. Try again shortly.");
+        btn.textContent = originalText;
+        btn.disabled = false;
       }
     }
 

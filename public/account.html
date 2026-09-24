@@ -40,6 +40,7 @@
           <div class="account-row"><span>Plan</span><strong id="accPlan"></strong></div>
           <div class="account-row"><span>Status</span><strong id="accStatus"></strong></div>
           <div class="account-row"><span>Renews</span><strong id="accRenewal"></strong></div>
+          <div class="account-row"><span>Referral Credits</span><strong id="accReferral"></strong></div>
         </div>
       </div>
     </div>
@@ -89,6 +90,13 @@
         statusEl.textContent = data.status;
         statusEl.className = data.status === "Active" ? "status-active" : "";
         document.getElementById("accRenewal").textContent = data.renewalDate;
+
+        const referralCredits = data.referralCredits || 0;
+        const referralCount = data.referralCount || 0;
+        document.getElementById("accReferral").textContent =
+          referralCredits > 0
+            ? `₦${referralCredits.toLocaleString()} (${referralCount} referral${referralCount === 1 ? "" : "s"})`
+            : "None yet";
 
         document.getElementById("accountDetails").style.display = "block";
       } catch {

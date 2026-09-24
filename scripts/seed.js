@@ -41,6 +41,8 @@ const MEMBERS_HEADER = [
   "PaymentProvider",
   "PaymentReference",
   "ReferredBy",
+  "ReferralCount",
+  "ReferralCredits",
 ];
 
 const EVENTS_HEADER = ["Timestamp", "Event", "Email", "Plan", "BrandSlug", "Provider", "Detail"];
@@ -52,6 +54,17 @@ const CONTRACTOR_LEADS_HEADER = [
   "Phone",
   "BusinessName",
   "Message",
+  "Status",
+];
+
+const PRICE_LOCKS_HEADER = [
+  "LockID",
+  "Email",
+  "ProductID",
+  "BrandSlug",
+  "LockedPrice",
+  "LockedAt",
+  "ExpiresAt",
   "Status",
 ];
 
@@ -116,12 +129,13 @@ async function writeTab(tabName, rows) {
 }
 
 async function main() {
-  await ensureTabsExist(["Brands", "Products", "Members", "Events", "ContractorLeads"]);
+  await ensureTabsExist(["Brands", "Products", "Members", "Events", "ContractorLeads", "PriceLocks"]);
   await writeTab("Brands", readJson("seed-brands.json"));
   await writeTab("Products", readJson("seed-products.json"));
   await writeHeaderIfEmpty("Members", MEMBERS_HEADER);
   await writeHeaderIfEmpty("Events", EVENTS_HEADER);
   await writeHeaderIfEmpty("ContractorLeads", CONTRACTOR_LEADS_HEADER);
+  await writeHeaderIfEmpty("PriceLocks", PRICE_LOCKS_HEADER);
   console.log("Done.");
 }
 
