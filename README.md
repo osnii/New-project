@@ -75,6 +75,16 @@ Freezes a product's current member price for that member for `PRICE_LOCK_DAYS`
 `min(locked price, current price)` — so it only ever protects them from an
 increase, never costs them a decrease you made in the meantime.
 
+**BrandRequests** (written when a visitor uses "Request a Brand" on `/brands.html`)
+`BrandName | RequestCount | RequesterEmails | FirstRequestedAt | LastRequestedAt | Status`
+
+Deduped by brand name (case-insensitive) — a repeat request for a brand
+that's already there just increments `RequestCount` and appends the new
+email to `RequesterEmails`, rather than creating another row. Sort this tab
+by `RequestCount` to see what to add next; there's no admin UI, so this is
+read directly off the sheet. `Status` is yours to update by hand (e.g. to
+`Added`) once you act on one — the app never reads or writes it beyond `New`.
+
 ## Setup
 
 1. `cp .env.example .env` and fill in:

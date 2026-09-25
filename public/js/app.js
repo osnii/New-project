@@ -315,6 +315,52 @@ async function handleContractorLeadSubmit(event) {
   }
 }
 
+function openBrandRequestModal() {
+  trackEvent("open_subscribe", { plan: "brand_request" });
+  document.getElementById("brandRequestModal").classList.add("open");
+}
+
+function closeBrandRequestModal() {
+  document.getElementById("brandRequestModal").classList.remove("open");
+}
+
+async function handleBrandRequestSubmit(event) {
+  event.preventDefault();
+
+  const brandName = document.getElementById("requestBrandName").value.trim();
+  const email = document.getElementById("requestBrandEmail").value.trim();
+
+  const btn = document.getElementById("brandRequestContinueBtn");
+  const originalText = btn.textContent;
+  btn.textContent = "Sending...";
+  btn.disabled = true;
+
+  trackEvent("start_checkout", { plan: "brand_request", provider: "brand_request", detail: brandName, email });
+
+  try {
+    const res = await fetch("/api/brand-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brandName, email }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      trackEvent("complete_signup", { plan: "brand_request", provider: "brand_request", detail: brandName, email });
+      showToast("Thanks! We'll factor this into what we add next.");
+      closeBrandRequestModal();
+      event.target.reset();
+    } else {
+      showToast(data.error || "Couldn't submit your request.");
+    }
+  } catch {
+    showToast("Something went wrong. Try again shortly.");
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("subscriptionForm");
   if (form) form.addEventListener("submit", handleSubscriptionSubmit);
@@ -324,6 +370,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const freeForm = document.getElementById("freeSignupForm");
   if (freeForm) freeForm.addEventListener("submit", handleFreeSignupSubmit);
+
+  const brandRequestForm = document.getElementById("brandRequestForm");
+  if (brandRequestForm) brandRequestForm.addEventListener("submit", handleBrandRequestSubmit);
 
   if (document.querySelector("[data-plan-tier]")) renderPlanCardPrices();
 });

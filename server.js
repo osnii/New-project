@@ -654,6 +654,63 @@ app.post("/api/contractor-lead", express.json(), async (req, res) => {
   }
 });
 
+// ---- Brand requests (demand signal for what to add next) ----
+
+// Dedupes by brand name (case-insensitive): a repeat request just bumps
+// RequestCount instead of creating a new row, so the sheet doubles as a
+// ranked demand list. A repeat request from the same email doesn't double
+// count, but a first-time email on an existing brand still increments it.
+app.post("/api/brand-request", express.json(), async (req, res) => {
+  const { brandName, email } = req.body || {};
+  const name = (brandName || "").trim();
+
+  if (!name) {
+    return res.status(400).json({ success: false, error: "Brand name is required" });
+  }
+
+  try {
+    const requests = await readRows("BrandRequests");
+    const existing = requests.find((r) => (r.BrandName || "").toLowerCase() === name.toLowerCase());
+    const today = new Date().toISOString().split("T")[0];
+    const normalizedEmail = (email || "").trim().toLowerCase();
+
+    if (existing) {
+      const emails = (existing.RequesterEmails || "")
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean);
+      const alreadyRequested = normalizedEmail && emails.includes(normalizedEmail);
+
+      if (!alreadyRequested) {
+        if (normalizedEmail) emails.push(normalizedEmail);
+        await updateRowWhere(
+          "BrandRequests",
+          (r) => (r.BrandName || "").toLowerCase() === name.toLowerCase(),
+          {
+            RequestCount: (Number(existing.RequestCount) || 0) + 1,
+            RequesterEmails: emails.join(", "),
+            LastRequestedAt: today,
+          }
+        );
+      }
+    } else {
+      await appendRow("BrandRequests", {
+        BrandName: name,
+        RequestCount: 1,
+        RequesterEmails: normalizedEmail || "",
+        FirstRequestedAt: today,
+        LastRequestedAt: today,
+        Status: "New",
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error recording brand request:", err.message);
+    res.status(500).json({ success: false, error: "Could not submit request" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`PriceEdge MVP server running on http://localhost:${PORT}`);
 });

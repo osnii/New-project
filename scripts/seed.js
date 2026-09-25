@@ -68,6 +68,15 @@ const PRICE_LOCKS_HEADER = [
   "Status",
 ];
 
+const BRAND_REQUESTS_HEADER = [
+  "BrandName",
+  "RequestCount",
+  "RequesterEmails",
+  "FirstRequestedAt",
+  "LastRequestedAt",
+  "Status",
+];
+
 function readJson(fileName) {
   return JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", fileName), "utf8"));
 }
@@ -129,13 +138,14 @@ async function writeTab(tabName, rows) {
 }
 
 async function main() {
-  await ensureTabsExist(["Brands", "Products", "Members", "Events", "ContractorLeads", "PriceLocks"]);
+  await ensureTabsExist(["Brands", "Products", "Members", "Events", "ContractorLeads", "PriceLocks", "BrandRequests"]);
   await writeTab("Brands", readJson("seed-brands.json"));
   await writeTab("Products", readJson("seed-products.json"));
   await writeHeaderIfEmpty("Members", MEMBERS_HEADER);
   await writeHeaderIfEmpty("Events", EVENTS_HEADER);
   await writeHeaderIfEmpty("ContractorLeads", CONTRACTOR_LEADS_HEADER);
   await writeHeaderIfEmpty("PriceLocks", PRICE_LOCKS_HEADER);
+  await writeHeaderIfEmpty("BrandRequests", BRAND_REQUESTS_HEADER);
   console.log("Done.");
 }
 

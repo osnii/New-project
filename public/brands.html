@@ -26,8 +26,37 @@
       <div id="brandGroups">
         <p class="empty-state">Loading brands…</p>
       </div>
+      <p class="section-subtitle" style="margin-top: 40px">
+        Don't see your brand? <a href="#" onclick="openBrandRequestModal(); return false;">Request it</a> —
+        the more requests a brand gets, the sooner we add it.
+      </p>
     </div>
   </section>
+
+  <!-- Brand Request Modal -->
+  <div id="brandRequestModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeBrandRequestModal()">&times;</button>
+      <h2 class="modal-title">Request a Brand</h2>
+      <p class="modal-description">
+        Tell us which brand you'd like to see — we prioritize what to add next based on demand.
+      </p>
+      <form id="brandRequestForm">
+        <div class="form-group">
+          <label class="form-label" for="requestBrandName">Brand Name</label>
+          <input type="text" class="form-input" id="requestBrandName" placeholder="e.g. Apple, Hisense..." required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="requestBrandEmail">Email (optional)</label>
+          <input type="email" class="form-input" id="requestBrandEmail" placeholder="So we can let you know if we add it" />
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-cancel" onclick="closeBrandRequestModal()">Cancel</button>
+          <button type="submit" class="btn-continue" id="brandRequestContinueBtn">Submit Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <footer>
     <div class="container">&copy; <span id="year"></span> PriceEdge. All rights reserved.</div>
