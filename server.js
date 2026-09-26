@@ -185,6 +185,37 @@ async function creditReferralReward({ referredBy, newMemberEmail, amountPaid }) 
   }
 }
 
+// Powers the homepage's savings claim with a real, conservative range across
+// the current catalog — never the reverse-engineerable exact price of any
+// one product. Both bounds are rounded DOWN to the nearest 5%, so the stated
+// range never overstates what a member actually gets.
+app.get("/api/savings-summary", async (req, res) => {
+  try {
+    const products = await readRows("Products");
+    const percents = products
+      .filter((p) => (p.Active || "").toLowerCase() !== "false")
+      .map((p) => {
+        const retail = Number(p.RetailPrice) || 0;
+        const member = Number(p.MemberPrice) || 0;
+        return retail > 0 && member > 0 && member < retail ? (1 - member / retail) * 100 : null;
+      })
+      .filter((pct) => pct !== null);
+
+    if (!percents.length) {
+      return res.json({ available: false });
+    }
+
+    const floorTo5 = (value) => Math.floor(value / 5) * 5;
+    const minPercent = floorTo5(Math.min(...percents));
+    const maxPercent = floorTo5(Math.max(...percents));
+
+    res.json({ available: true, minPercent, maxPercent, productCount: percents.length });
+  } catch (err) {
+    console.error("Error computing savings summary:", err.message);
+    res.status(500).json({ available: false });
+  }
+});
+
 // ---- Brands & products (Google Sheets as the catalog) ----
 
 app.get("/api/brands", async (req, res) => {

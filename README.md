@@ -160,6 +160,17 @@ When pledges reach `TargetQty`, every pledger gets an email that the deal is
 on — that's it. Nothing is charged; you follow up off-platform to actually
 collect payment and arrange delivery, same as every other order in this MVP.
 
+## Homepage savings proof (`GET /api/savings-summary`)
+
+Computes a real, conservative savings range across the current `Products`
+tab — both bounds rounded *down* to the nearest 5%, so the range never
+overstates what a member actually gets. Shown on the homepage as "Member
+prices can be X-Y% below comparable retail prices on selected products,"
+with a methodology note underneath. Deliberately a range across the whole
+catalog, not any single product's exact numbers — showing one product's
+precise percentage next to its already-public retail price would let
+anyone back out its exact (still-gated) member price.
+
 ## Group buy recommendations (`/admin-insights.html`)
 
 A read-only page — not linked from the site's nav, so treat the URL as
@@ -201,6 +212,21 @@ no such event, so installing there is manual (Share → Add to Home Screen —
 worth telling users this explicitly, since otherwise it's not discoverable).
 The icons in `public/icons/` are a plain placeholder mark — swap them for a
 real logo whenever you have one; nothing else needs to change.
+
+## Future feature: tier-based catalogue/access rules — validate before building
+
+Basic/Pro/Elite currently unlock the *identical* catalog — the only real
+difference between them is price. The homepage copy says this explicitly
+now, on purpose, after an external commercial review found the previous
+copy ("20+ deals" / "full catalog" / "priority support") promised
+differentiation the code didn't enforce. Before building real per-tier
+gating (a `MinPlanTier` column on Products, gating logic in
+`/api/brands/:slug/products`), validate it's the right lever first: are
+Basic members buying enough that limiting their catalog would hurt
+conversion? Do customers care about catalog breadth, or would priority
+sourcing/support matter more? Is a natural professional/business tier
+emerging from real usage? Catalogue gating might turn out to be the wrong
+monetization mechanism entirely — don't build it on a guess.
 
 ## What's intentionally missing (by design, for an MVP)
 

@@ -44,6 +44,16 @@
     </div>
   </section>
 
+  <section id="savings-proof" style="text-align: center">
+    <div class="container">
+      <h2 id="savingsHeadline">See how much members save</h2>
+      <p class="section-subtitle" id="savingsBody">Loading current savings…</p>
+      <p class="price-validity-note" id="savingsMethodology" style="display: none;">
+        Savings are based on PriceEdge's current reference retail prices and may vary by product and availability.
+      </p>
+    </div>
+  </section>
+
   <section id="how-it-works">
     <div class="container">
       <h2>How it works</h2>
@@ -59,7 +69,7 @@
         </div>
         <div class="plan-card">
           <h3>3. Buy at member price</h3>
-          <p class="desc">See member pricing and order directly.</p>
+          <p class="desc">See member pricing, then we help you place the order.</p>
         </div>
       </div>
     </div>
@@ -85,22 +95,29 @@
         <div class="plan-card" data-plan-tier="basic">
           <h3>Basic</h3>
           <div class="plan-price">₦2,500<span>/mo</span></div>
-          <p class="desc">20+ deals across brands, monthly price list.</p>
+          <p class="desc">Full member pricing across every brand in the catalog.</p>
+          <p class="annual-savings-note" data-plan-tier-savings="basic" style="display: none;"></p>
           <button class="btn-primary" onclick="openSubscribeModal(resolvePlanKey('basic'))">Join Basic</button>
         </div>
-        <div class="plan-card featured" data-plan-tier="pro">
+        <div class="plan-card" data-plan-tier="pro">
           <h3>Pro</h3>
           <div class="plan-price">₦5,000<span>/mo</span></div>
-          <p class="desc">Full catalog access across all brands, priority support.</p>
+          <p class="desc">Same full access as Basic, at a higher contribution level.</p>
+          <p class="annual-savings-note" data-plan-tier-savings="pro" style="display: none;"></p>
           <button class="btn-primary" onclick="openSubscribeModal(resolvePlanKey('pro'))">Join Pro</button>
         </div>
         <div class="plan-card" data-plan-tier="elite">
           <h3>Elite</h3>
           <div class="plan-price">₦10,000<span>/mo</span></div>
-          <p class="desc">Everything in Pro, plus bulk/contractor order support.</p>
+          <p class="desc">Same full access as Basic, at our highest contribution level.</p>
+          <p class="annual-savings-note" data-plan-tier-savings="elite" style="display: none;"></p>
           <button class="btn-primary" onclick="openSubscribeModal(resolvePlanKey('elite'))">Join Elite</button>
         </div>
       </div>
+      <p class="section-subtitle" style="margin-top: 24px;">
+        Basic, Pro and Elite currently unlock the same catalog access — pricing tiers will differentiate further
+        as we add priority sourcing and support. Pick whichever level fits how much you'd like to support that.
+      </p>
     </div>
   </section>
 

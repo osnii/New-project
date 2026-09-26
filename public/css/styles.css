@@ -464,6 +464,13 @@ section h2 {
   margin-bottom: 20px;
 }
 
+.annual-savings-note {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+  margin: -12px 0 16px;
+}
+
 /* Modal */
 .modal {
   display: none;

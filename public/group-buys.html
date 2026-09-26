@@ -92,11 +92,12 @@
           ? Math.round((1 - d.groupPrice / d.retailPrice) * 100)
           : null;
 
+      const remaining = Math.max(0, d.targetQty - d.pledgedQty);
       const statusLine = d.successful
         ? `<span class="locked-price" style="color: var(--green); font-style: normal;">✅ Unlocked — target reached</span>`
         : d.expired
         ? `<span class="locked-price">Deadline passed — deal closed</span>`
-        : `<span class="locked-price">${d.pledgedQty} of ${d.targetQty} joined${d.deadline ? ` · closes ${d.deadline}` : ""}</span>`;
+        : `<span class="locked-price">${d.pledgedQty} of ${d.targetQty} joined · ${remaining} spot${remaining === 1 ? "" : "s"} remaining${d.deadline ? ` · closes ${d.deadline}` : ""}</span>`;
 
       const canJoin = !d.expired;
 
@@ -116,7 +117,8 @@
             <div style="margin-top: 8px;">${statusLine}</div>
             ${
               canJoin
-                ? `<button type="button" class="price-lock-btn" onclick="openPledgeModal('${escapeHtmlAttr(jsStringLiteral(d.id))}')">Join This Deal</button>`
+                ? `<p class="locked-price" style="margin-top: 6px;">No payment until the target is reached</p>
+                   <button type="button" class="price-lock-btn" onclick="openPledgeModal('${escapeHtmlAttr(jsStringLiteral(d.id))}')">Join This Deal</button>`
                 : ""
             }
           </div>

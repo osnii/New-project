@@ -126,8 +126,44 @@ function renderPlanCardPrices() {
       if (!plan) return;
       const suffix = plan.period === "year" ? "/yr" : "/mo";
       card.querySelector(".plan-price").innerHTML = `₦${plan.amountNaira.toLocaleString()}<span>${suffix}</span>`;
+
+      const note = document.querySelector(`[data-plan-tier-savings="${tier}"]`);
+      if (!note) return;
+      const monthlyPlan = config.plans[tier];
+      if (plan.period === "year" && monthlyPlan) {
+        const savedAmount = monthlyPlan.amountNaira * 12 - plan.amountNaira;
+        note.textContent = savedAmount > 0 ? `Save ₦${savedAmount.toLocaleString()}/year vs paying monthly` : "";
+        note.style.display = savedAmount > 0 ? "block" : "none";
+      } else {
+        note.style.display = "none";
+      }
     });
   });
+}
+
+function loadSavingsProof() {
+  const headline = document.getElementById("savingsHeadline");
+  const body = document.getElementById("savingsBody");
+  const methodology = document.getElementById("savingsMethodology");
+  if (!headline || !body) return;
+
+  fetch("/api/savings-summary")
+    .then((res) => res.json())
+    .then((data) => {
+      if (!data.available) {
+        headline.parentElement.parentElement.style.display = "none";
+        return;
+      }
+      const rangeText =
+        data.minPercent === data.maxPercent
+          ? `up to ${data.maxPercent}%`
+          : `${data.minPercent}–${data.maxPercent}%`;
+      body.textContent = `Member prices can be ${rangeText} below comparable retail prices on selected products.`;
+      methodology.style.display = "block";
+    })
+    .catch(() => {
+      headline.parentElement.parentElement.style.display = "none";
+    });
 }
 
 function openSubscribeModal(planKey) {
@@ -427,4 +463,5 @@ document.addEventListener("DOMContentLoaded", () => {
   if (brandRequestForm) brandRequestForm.addEventListener("submit", handleBrandRequestSubmit);
 
   if (document.querySelector("[data-plan-tier]")) renderPlanCardPrices();
+  loadSavingsProof();
 });
