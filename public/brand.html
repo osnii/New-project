@@ -42,7 +42,7 @@
   </section>
 
   <footer>
-    <div class="container">&copy; <span id="year"></span> PriceEdge. All rights reserved.</div>
+    <div class="container">&copy; <span id="year"></span> PriceEdge. All rights reserved. &middot; <a href="/policies.html">Policies</a></div>
   </footer>
 
   <div id="toast" class="toast"><span id="toastMessage"></span></div>
@@ -112,6 +112,7 @@
                   <h3>${escapeHtmlAttr(p.name)}</h3>
                   <div class="category">${escapeHtmlAttr(p.category || "")}</div>
                   <div class="price-row">${priceHtml}</div>
+                  ${p.warrantyInfo ? `<div class="locked-price" style="font-style: normal;">${escapeHtmlAttr(p.warrantyInfo)}</div>` : ""}
                   ${priceLockHtml}
                 </div>
               </div>`;

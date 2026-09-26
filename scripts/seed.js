@@ -90,6 +90,8 @@ const GROUP_BUYS_HEADER = [
 
 const GROUP_BUY_PLEDGES_HEADER = ["PledgeID", "GroupBuyID", "Email", "Name", "Quantity", "PledgedAt"];
 
+const REFUND_REQUESTS_HEADER = ["RequestID", "Email", "Reason", "Detail", "RequestedAt", "Status"];
+
 function readJson(fileName) {
   return JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", fileName), "utf8"));
 }
@@ -161,6 +163,7 @@ async function main() {
     "BrandRequests",
     "GroupBuys",
     "GroupBuyPledges",
+    "RefundRequests",
   ]);
   await writeTab("Brands", readJson("seed-brands.json"));
   await writeTab("Products", readJson("seed-products.json"));
@@ -171,6 +174,7 @@ async function main() {
   await writeHeaderIfEmpty("BrandRequests", BRAND_REQUESTS_HEADER);
   await writeHeaderIfEmpty("GroupBuys", GROUP_BUYS_HEADER);
   await writeHeaderIfEmpty("GroupBuyPledges", GROUP_BUY_PLEDGES_HEADER);
+  await writeHeaderIfEmpty("RefundRequests", REFUND_REQUESTS_HEADER);
   console.log("Done.");
 }
 

@@ -13,7 +13,8 @@
     "Description": "43-inch 4K UHD Smart TV.",
     "Active": "TRUE",
     "FreeAccess": "TRUE",
-    "RetailPriceCheckedAt": ""
+    "RetailPriceCheckedAt": "",
+    "WarrantyInfo": ""
   },
   {
     "ProductID": "P002",
@@ -29,7 +30,8 @@
     "Description": "300-litre double door refrigerator.",
     "Active": "TRUE",
     "FreeAccess": "FALSE",
-    "RetailPriceCheckedAt": ""
+    "RetailPriceCheckedAt": "",
+    "WarrantyInfo": ""
   },
   {
     "ProductID": "P003",
@@ -45,7 +47,8 @@
     "Description": "43-inch 4K UHD Smart TV.",
     "Active": "TRUE",
     "FreeAccess": "FALSE",
-    "RetailPriceCheckedAt": ""
+    "RetailPriceCheckedAt": "",
+    "WarrantyInfo": ""
   },
   {
     "ProductID": "P004",
@@ -61,6 +64,7 @@
     "Description": "Noise-cancelling wireless headphones.",
     "Active": "TRUE",
     "FreeAccess": "TRUE",
-    "RetailPriceCheckedAt": ""
+    "RetailPriceCheckedAt": "",
+    "WarrantyInfo": ""
   }
 ]

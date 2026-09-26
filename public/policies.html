@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Policies - PriceEdge</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0071e3" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <a href="/" class="logo">PriceEdge</a>
+      <ul class="nav-links">
+        <li><a href="/brands.html">Brands</a></li>
+        <li><a href="/group-buys.html">Group Buys</a></li>
+        <li><a href="/#pricing">Pricing</a></li>
+        <li><a href="/account.html">My Account</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button type="button" class="nav-toggle" onclick="toggleMobileNav()" aria-label="Menu"><span></span></button>
+        <a href="/#pricing" class="cta-button">Join Now</a>
+      </div>
+    </nav>
+  </header>
+
+  <section>
+    <div class="container" style="max-width: 720px;">
+      <h2>Policies</h2>
+      <p class="section-subtitle">Warranty, delivery, cancellation, and refunds — plain language, no fine print surprises.</p>
+
+      <div style="margin-top: 40px;">
+        <h3>Warranty</h3>
+        <p style="margin-top: 12px; color: var(--ink);">
+          Warranty coverage is provided by the applicable manufacturer or distributor and may vary by product.
+          Before we finalize your order, we'll confirm the warranty available for your selected product. Where
+          required, our team can also help you connect with the relevant supplier for warranty support.
+        </p>
+        <p style="margin-top: 12px; color: var(--gray); font-size: 14px;">
+          A product listing won't claim "warranty included" without saying what kind and how long — where we
+          haven't confirmed that yet for a specific item, we'll say so rather than leave it vague.
+        </p>
+      </div>
+
+      <div style="margin-top: 40px;">
+        <h3>Delivery</h3>
+        <p style="margin-top: 12px; color: var(--ink);">
+          Delivery availability and charges depend on the product and destination. Your delivery cost and
+          estimated timeline will be confirmed before we finalize your order — delivery available to selected
+          locations initially, with other locations handled on request.
+        </p>
+        <p style="margin-top: 12px; color: var(--ink);">
+          Orders are fulfilled through our supply partners or approved delivery providers. If your order arrives
+          visibly damaged, please notify us within <strong>24 hours of delivery</strong> with photos or videos of
+          the product and packaging so we can investigate and assist with resolution.
+        </p>
+      </div>
+
+      <div style="margin-top: 40px;">
+        <h3>Membership Cancellation</h3>
+        <p style="margin-top: 12px; color: var(--ink);">
+          You can cancel your membership's renewal at any time. Cancelling stops your next subscription charge —
+          it does not immediately remove access you've already paid for. Your membership stays active until the
+          end of your current billing period.
+        </p>
+        <p style="margin-top: 12px; color: var(--ink);">
+          To cancel renewal, email us at
+          <a href="mailto:priceedgeio@gmail.com">priceedgeio@gmail.com</a> — self-service cancellation from your
+          account is on our roadmap but not built yet.
+        </p>
+      </div>
+
+      <div style="margin-top: 40px;">
+        <h3>First Membership Guarantee (Refunds)</h3>
+        <p style="margin-top: 12px; color: var(--ink);">
+          We want your PriceEdge membership to provide real value. If you're a new member and can't find a
+          suitable deal for what you're looking to purchase, you may request a refund within
+          <strong>48 hours of your first membership payment</strong>, provided you haven't completed a purchase
+          through PriceEdge.
+        </p>
+        <p style="margin-top: 12px; color: var(--ink);">
+          This guarantee applies to your first membership payment only — it doesn't apply to renewals. Refund
+          requests remain subject to verification of membership and account activity.
+        </p>
+        <button class="btn-primary" style="margin-top: 16px;" onclick="location.href='/account.html'">
+          Request a Refund from My Account
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      &copy; <span id="year"></span> PriceEdge. All rights reserved. &middot;
+      <a href="/policies.html">Policies</a>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast"><span id="toastMessage"></span></div>
+
+  <script src="/js/app.js"></script>
+  <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+</body>
+</html>

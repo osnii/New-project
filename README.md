@@ -48,7 +48,7 @@ correct headers) automatically if they don't already exist:
 
 **Products** (`Category` here is the product's category within its brand,
 e.g. "Televisions" — unrelated to the brand's own Category above)
-`ProductID | BrandSlug | Name | Category | RetailPrice | MemberPrice | BuyPrice | Supplier | GrossProfit | ImageURL | Description | Active | FreeAccess | RetailPriceCheckedAt`
+`ProductID | BrandSlug | Name | Category | RetailPrice | MemberPrice | BuyPrice | Supplier | GrossProfit | ImageURL | Description | Active | FreeAccess | RetailPriceCheckedAt | WarrantyInfo`
 
 `BuyPrice`, `Supplier`, and `GrossProfit` are for your own cost/margin
 tracking — the app never reads or exposes them; they're not part of the API
@@ -64,6 +64,13 @@ product silently drops out of the savings range once it's older than
 `RETAIL_PRICE_MAX_AGE_DAYS` (default 30). Blank counts as never-verified,
 which also excludes it — on a fresh install, the savings section stays
 hidden until you set this for at least one product.
+
+`WarrantyInfo` is free text (e.g. `1-Year LG Manufacturer Warranty` or
+`Distributor Warranty – 6 Months`) shown on that product's brand page —
+blank by default, and shown only when non-blank, so the site never implies
+warranty coverage you haven't actually confirmed for that SKU yet. Per the
+warranty policy (see Policies below), don't fill this in with a generic
+"Warranty Included" — say what kind and how long.
 
 **Members** (the backend writes to this one as people subscribe)
 `MemberID | Name | Email | Phone | Role | BusinessName | Plan | AmountPaid | StartDate | RenewalDate | Status | PaymentProvider | PaymentReference | ReferredBy | ReferralCount | ReferralCredits`
@@ -238,6 +245,48 @@ conversion? Do customers care about catalog breadth, or would priority
 sourcing/support matter more? Is a natural professional/business tier
 emerging from real usage? Catalogue gating might turn out to be the wrong
 monetization mechanism entirely — don't build it on a guess.
+
+## Policies (`/policies.html`) and the refund guarantee
+
+Warranty, delivery, cancellation, and refund terms live on `/policies.html`,
+linked from every page's footer plus a trust strip and a guarantee callout
+near the subscribe modal on the homepage. These are real operational
+decisions, not placeholder marketing copy — written to match how this MVP
+actually works today (assisted, off-platform order completion — not an
+on-platform checkout), so don't tighten the wording to imply more than the
+app currently does without updating the actual flow to match.
+
+**Cancellation** has no self-service UI yet — the policy says so explicitly
+and directs members to email `SMTP_USER` to cancel renewal. For a Paystack
+member, actually disabling the subscription still needs a real action on
+your end (Paystack dashboard, or their API) — the existing
+`/api/paystack/webhook` handler already sets `Status: Cancelled` in Members
+when Paystack reports `subscription.disable`/`subscription.not_renew`, so
+that part needs no new code. Squad members never auto-renew in the first
+place (see above), so there's nothing to cancel for them beyond just not
+paying again next cycle.
+
+**Refund requests** (the 48-hour first-membership guarantee) go through
+`POST /api/refund-request` on `/account.html`, into a new `RefundRequests`
+tab:
+
+`RequestID | Email | Reason | Detail | RequestedAt | Status`
+
+`Reason` is one of a fixed set (`Couldn't find product`, `Price wasn't
+attractive`, `Product out of stock`, `Didn't understand service`, `Other`)
+— besides handling the individual request, sorting this tab by `Reason`
+over time is a real demand-insight signal: lots of "price wasn't
+attractive" points at a pricing/sourcing problem, lots of "couldn't find
+product" points at a catalog problem. The account page shows a rough
+eligibility hint ("within your 48-hour window" / "window likely closed"),
+computed from `Members.StartDate` — that field has no time-of-day
+precision, so treat the hint as informational, not authoritative. **Nothing
+here is auto-approved**: this app has no record of whether a member has
+completed an actual purchase (that still happens entirely off-platform), so
+you verify eligibility by hand against `RequestedAt` and your own records,
+then process the actual refund (Paystack/Squad dashboard) and update
+`Status` yourself — same manual-review pattern as `ContractorLeads` and
+`BrandRequests`.
 
 ## What's intentionally missing (by design, for an MVP)
 

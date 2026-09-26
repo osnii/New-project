@@ -22,6 +22,7 @@ import {
   notifyAdminOfContractorLead,
   notifyReferralReward,
   sendGroupBuySuccessEmail,
+  notifyAdminOfRefundRequest,
 } from "./lib/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -303,6 +304,10 @@ app.get("/api/brands/:slug/products", async (req, res) => {
           memberPrice: unlocked ? effectivePrice : null,
           savingsPercent,
           priceLockExpiresAt: lock ? lock.ExpiresAt : null,
+          // Blank until you fill in real per-SKU warranty terms (e.g. "1-Year
+          // LG Manufacturer Warranty") — shown only when non-blank so the
+          // site never implies warranty coverage that isn't confirmed yet.
+          warrantyInfo: p.WarrantyInfo || "",
         };
       });
 
@@ -971,6 +976,39 @@ app.get("/api/admin/group-buy-insights", async (req, res) => {
   } catch (err) {
     console.error("Error computing group buy insights:", err.message);
     res.status(500).json({ error: "Could not compute insights" });
+  }
+});
+
+// ---- Refund requests (48-hour first-membership guarantee) ----
+//
+// Captures the request with a structured reason for both the founder's
+// review and as a demand-insight signal (see README). Deliberately does not
+// auto-verify or auto-approve anything — this app has no record of whether
+// a member has completed an actual purchase (that still happens entirely
+// off-platform), so eligibility is a human judgment call against this row
+// plus the Members sheet, same as every other manual decision in this MVP.
+app.post("/api/refund-request", express.json(), async (req, res) => {
+  const { email, reason, detail } = req.body || {};
+
+  if (!email || !reason) {
+    return res.status(400).json({ success: false, error: "Email and reason are required" });
+  }
+
+  try {
+    await appendRow("RefundRequests", {
+      RequestID: `RR-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      Email: email,
+      Reason: reason,
+      Detail: detail || "",
+      RequestedAt: new Date().toISOString(),
+      Status: "Pending",
+    });
+
+    res.json({ success: true });
+    notifyAdminOfRefundRequest({ email, reason, detail }); // fire-and-forget
+  } catch (err) {
+    console.error("Error recording refund request:", err.message);
+    res.status(500).json({ success: false, error: "Could not submit request" });
   }
 });
 

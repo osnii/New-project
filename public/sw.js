@@ -8,6 +8,7 @@ const APP_SHELL = [
   "/brands.html",
   "/group-buys.html",
   "/account.html",
+  "/policies.html",
   "/css/styles.css",
   "/js/app.js",
   "/manifest.json",
