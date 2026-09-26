@@ -57,6 +57,10 @@ async function getConfig() {
   return appConfig;
 }
 
+function toggleMobileNav() {
+  document.querySelector(".nav-links")?.classList.toggle("mobile-open");
+}
+
 function showToast(message) {
   const toast = document.getElementById("toast");
   if (!toast) return;
