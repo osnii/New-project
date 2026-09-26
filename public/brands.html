@@ -15,6 +15,7 @@
       <a href="/" class="logo">PriceEdge</a>
       <ul class="nav-links">
         <li><a href="/brands.html">Brands</a></li>
+        <li><a href="/group-buys.html">Group Buys</a></li>
         <li><a href="/#pricing">Pricing</a></li>
         <li><a href="/account.html">My Account</a></li>
       </ul>
@@ -75,8 +76,8 @@
     function brandCardHtml(b) {
       return `
         <a class="brand-card" href="/brand.html?slug=${encodeURIComponent(b.Slug)}">
-          ${b.LogoURL ? `<img src="${b.LogoURL}" alt="${b.Name}" />` : ""}
-          <div class="brand-name">${b.Name}</div>
+          ${b.LogoURL ? `<img src="${escapeHtmlAttr(b.LogoURL)}" alt="${escapeHtmlAttr(b.Name)}" />` : ""}
+          <div class="brand-name">${escapeHtmlAttr(b.Name)}</div>
         </a>`;
     }
 
@@ -109,7 +110,7 @@
           .map(
             ([category, categoryBrands]) => `
             <div class="brand-category">
-              <h3 class="category-heading">${category}</h3>
+              <h3 class="category-heading">${escapeHtmlAttr(category)}</h3>
               <div class="brand-grid">${categoryBrands.map(brandCardHtml).join("")}</div>
             </div>`
           )

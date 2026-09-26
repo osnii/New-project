@@ -296,6 +296,20 @@ section h2 {
   font-style: italic;
 }
 
+.groupbuy-progress-track {
+  margin-top: 10px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-soft);
+  overflow: hidden;
+}
+
+.groupbuy-progress-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 4px;
+}
+
 .price-lock-btn {
   display: block;
   width: 100%;

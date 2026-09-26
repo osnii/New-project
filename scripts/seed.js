@@ -77,6 +77,19 @@ const BRAND_REQUESTS_HEADER = [
   "Status",
 ];
 
+const GROUP_BUYS_HEADER = [
+  "GroupBuyID",
+  "ProductID",
+  "BrandSlug",
+  "TargetQty",
+  "GroupPrice",
+  "Deadline",
+  "Status",
+  "CreatedAt",
+];
+
+const GROUP_BUY_PLEDGES_HEADER = ["PledgeID", "GroupBuyID", "Email", "Name", "Quantity", "PledgedAt"];
+
 function readJson(fileName) {
   return JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", fileName), "utf8"));
 }
@@ -138,7 +151,17 @@ async function writeTab(tabName, rows) {
 }
 
 async function main() {
-  await ensureTabsExist(["Brands", "Products", "Members", "Events", "ContractorLeads", "PriceLocks", "BrandRequests"]);
+  await ensureTabsExist([
+    "Brands",
+    "Products",
+    "Members",
+    "Events",
+    "ContractorLeads",
+    "PriceLocks",
+    "BrandRequests",
+    "GroupBuys",
+    "GroupBuyPledges",
+  ]);
   await writeTab("Brands", readJson("seed-brands.json"));
   await writeTab("Products", readJson("seed-products.json"));
   await writeHeaderIfEmpty("Members", MEMBERS_HEADER);
@@ -146,6 +169,8 @@ async function main() {
   await writeHeaderIfEmpty("ContractorLeads", CONTRACTOR_LEADS_HEADER);
   await writeHeaderIfEmpty("PriceLocks", PRICE_LOCKS_HEADER);
   await writeHeaderIfEmpty("BrandRequests", BRAND_REQUESTS_HEADER);
+  await writeHeaderIfEmpty("GroupBuys", GROUP_BUYS_HEADER);
+  await writeHeaderIfEmpty("GroupBuyPledges", GROUP_BUY_PLEDGES_HEADER);
   console.log("Done.");
 }
 

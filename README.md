@@ -141,6 +141,25 @@ you (or anyone) can open from any computer or phone:
 The Google Sheet stays the single source of truth either way — this just
 moves where the Node process itself runs, from your machine to Render's.
 
+## Group buys (demand-aggregation, no payment collection yet)
+
+`/group-buys.html` lets a visitor pledge to buy a product alongside others —
+no subscription, no payment. You create a deal by hand:
+
+**GroupBuys** — `GroupBuyID | ProductID | BrandSlug | TargetQty | GroupPrice | Deadline | Status | CreatedAt`
+
+Add a row referencing an existing `ProductID` from the `Products` tab, a
+headcount target, the group price, and a deadline (`YYYY-MM-DD`). Leave
+`Status` as `Open` (or blank). The app flips it to `Successful` automatically
+once enough people pledge — set it to `Cancelled` yourself to pull a deal.
+
+**GroupBuyPledges** (the backend writes to this one as people join)
+`PledgeID | GroupBuyID | Email | Name | Quantity | PledgedAt`
+
+When pledges reach `TargetQty`, every pledger gets an email that the deal is
+on — that's it. Nothing is charged; you follow up off-platform to actually
+collect payment and arrange delivery, same as every other order in this MVP.
+
 ## Installable as an app (PWA)
 
 The site is a PWA: `public/manifest.json` + `public/sw.js` (a minimal,

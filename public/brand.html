@@ -15,6 +15,7 @@
       <a href="/" class="logo">PriceEdge</a>
       <ul class="nav-links">
         <li><a href="/brands.html">Brands</a></li>
+        <li><a href="/group-buys.html">Group Buys</a></li>
         <li><a href="/#pricing">Pricing</a></li>
         <li><a href="/account.html">My Account</a></li>
       </ul>
@@ -98,15 +99,15 @@
             const priceLockHtml = p.priceLockExpiresAt
               ? `<div class="price-lock-badge">🔒 Locked until ${p.priceLockExpiresAt}</div>`
               : p.memberPrice
-              ? `<button type="button" class="price-lock-btn" onclick="lockPrice('${p.id}', this)">Lock this price for ${config.priceLockDays || 14} days</button>`
+              ? `<button type="button" class="price-lock-btn" onclick="lockPrice('${escapeHtmlAttr(jsStringLiteral(p.id))}', this)">Lock this price for ${config.priceLockDays || 14} days</button>`
               : "";
 
             return `
               <div class="product-card">
-                ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" />` : ""}
+                ${p.imageUrl ? `<img src="${escapeHtmlAttr(p.imageUrl)}" alt="${escapeHtmlAttr(p.name)}" />` : ""}
                 <div class="product-body">
-                  <h3>${p.name}</h3>
-                  <div class="category">${p.category || ""}</div>
+                  <h3>${escapeHtmlAttr(p.name)}</h3>
+                  <div class="category">${escapeHtmlAttr(p.category || "")}</div>
                   <div class="price-row">${priceHtml}</div>
                   ${priceLockHtml}
                 </div>

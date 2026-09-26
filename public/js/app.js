@@ -1,5 +1,25 @@
 // Shared helpers used across pages: config loading, toasts, and the subscribe modal.
 
+// Escapes a value for safe interpolation into an HTML attribute (alt, title,
+// or a double-quoted attribute like onclick="..."). Sheet data (product
+// names, brand names) is untrusted-ish free text an admin typed — a stray
+// `"` (very common in TV size labels like 43") would otherwise break out of
+// the attribute and corrupt the surrounding markup.
+function escapeHtmlAttr(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+// Escapes a value so it's safe as a single-quoted JS string literal *inside*
+// an onclick="..." attribute. Apply this first, then escapeHtmlAttr on the
+// result, since the browser HTML-unescapes the attribute before running it
+// as JS — the JS-string escaping has to survive that unescaping step.
+function jsStringLiteral(str) {
+  return String(str ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch(() => {});

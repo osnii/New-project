@@ -21,6 +21,7 @@ import {
   sendContractorLeadConfirmation,
   notifyAdminOfContractorLead,
   notifyReferralReward,
+  sendGroupBuySuccessEmail,
 } from "./lib/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -708,6 +709,131 @@ app.post("/api/brand-request", express.json(), async (req, res) => {
   } catch (err) {
     console.error("Error recording brand request:", err.message);
     res.status(500).json({ success: false, error: "Could not submit request" });
+  }
+});
+
+// ---- Group buys (demand-aggregation: pledge interest, no payment yet) ----
+//
+// You create a group buy by hand in the GroupBuys sheet tab (which product,
+// target headcount, group price, deadline). Visitors pledge a quantity with
+// just an email — no subscription required, since the point is reading real
+// demand before committing to buy stock. Nothing is charged here; once
+// enough people join, pledgers get an email and you close the sale
+// off-platform, same as every other order in this MVP.
+
+function sumPledgedQty(pledges, groupBuyId) {
+  return pledges
+    .filter((p) => p.GroupBuyID === groupBuyId)
+    .reduce((sum, p) => sum + (Number(p.Quantity) || 1), 0);
+}
+
+app.get("/api/group-buys", async (req, res) => {
+  try {
+    const [groupBuys, products, pledges] = await Promise.all([
+      readRows("GroupBuys"),
+      readRows("Products"),
+      readRows("GroupBuyPledges"),
+    ]);
+
+    const today = new Date().toISOString().split("T")[0];
+    const deals = groupBuys
+      .filter((g) => (g.Status || "").toLowerCase() !== "cancelled")
+      .map((g) => {
+        const product = products.find((p) => p.ProductID === g.ProductID);
+        const targetQty = Number(g.TargetQty) || 0;
+        const pledgedQty = sumPledgedQty(pledges, g.GroupBuyID);
+        const isSuccessful = (g.Status || "").toLowerCase() === "successful" || pledgedQty >= targetQty;
+
+        return {
+          id: g.GroupBuyID,
+          productName: product?.Name || g.ProductID,
+          brandSlug: product?.BrandSlug || g.BrandSlug || "",
+          imageUrl: product?.ImageURL || "",
+          retailPrice: Number(product?.RetailPrice) || 0,
+          groupPrice: Number(g.GroupPrice) || 0,
+          targetQty,
+          pledgedQty,
+          deadline: g.Deadline || "",
+          expired: !isSuccessful && g.Deadline && g.Deadline < today,
+          successful: isSuccessful,
+        };
+      });
+
+    res.json(deals);
+  } catch (err) {
+    console.error("Error reading group buys:", err.message);
+    res.status(500).json({ error: "Could not load group buys" });
+  }
+});
+
+app.post("/api/group-buys/:id/pledge", express.json(), async (req, res) => {
+  const { id } = req.params;
+  const { name, email, quantity } = req.body || {};
+
+  if (!name || !email) {
+    return res.status(400).json({ success: false, error: "Name and email are required" });
+  }
+
+  try {
+    const [groupBuys, products, pledges] = await Promise.all([
+      readRows("GroupBuys"),
+      readRows("Products"),
+      readRows("GroupBuyPledges"),
+    ]);
+
+    const groupBuy = groupBuys.find((g) => g.GroupBuyID === id);
+    if (!groupBuy) return res.status(404).json({ success: false, error: "Group buy not found" });
+
+    const status = (groupBuy.Status || "").toLowerCase();
+    const today = new Date().toISOString().split("T")[0];
+    const alreadySuccessful = status === "successful" || sumPledgedQty(pledges, id) >= (Number(groupBuy.TargetQty) || 0);
+
+    if (status === "cancelled") {
+      return res.status(400).json({ success: false, error: "This group buy has been cancelled" });
+    }
+    if (!alreadySuccessful && groupBuy.Deadline && groupBuy.Deadline < today) {
+      return res.status(400).json({ success: false, error: "This group buy's deadline has passed" });
+    }
+
+    const qty = Math.max(1, Number(quantity) || 1);
+    await appendRow("GroupBuyPledges", {
+      PledgeID: `GBP-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      GroupBuyID: id,
+      Email: email,
+      Name: name,
+      Quantity: qty,
+      PledgedAt: today,
+    });
+
+    const newTotal = sumPledgedQty(pledges, id) + qty;
+    const targetQty = Number(groupBuy.TargetQty) || 0;
+    const justUnlocked = !alreadySuccessful && newTotal >= targetQty;
+
+    if (justUnlocked) {
+      await updateRowWhere("GroupBuys", (g) => g.GroupBuyID === id, { Status: "Successful" });
+
+      const product = products.find((p) => p.ProductID === groupBuy.ProductID);
+      const productName = product?.Name || groupBuy.ProductID;
+      const allPledgers = [...pledges.filter((p) => p.GroupBuyID === id), { Email: email, Name: name }];
+      const seen = new Set();
+
+      for (const pledger of allPledgers) {
+        const pledgerEmail = (pledger.Email || "").toLowerCase();
+        if (!pledgerEmail || seen.has(pledgerEmail)) continue;
+        seen.add(pledgerEmail);
+        sendGroupBuySuccessEmail({
+          to: pledger.Email,
+          name: pledger.Name,
+          productName,
+          groupPrice: Number(groupBuy.GroupPrice) || 0,
+        }); // fire-and-forget
+      }
+    }
+
+    res.json({ success: true, pledgedQty: newTotal, targetQty, unlocked: newTotal >= targetQty });
+  } catch (err) {
+    console.error("Error recording group buy pledge:", err.message);
+    res.status(500).json({ success: false, error: "Could not join this group buy" });
   }
 });
 

@@ -6,6 +6,7 @@ const CACHE_VERSION = "priceedge-v1";
 const APP_SHELL = [
   "/",
   "/brands.html",
+  "/group-buys.html",
   "/account.html",
   "/css/styles.css",
   "/js/app.js",

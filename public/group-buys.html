@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Group Buys - PriceEdge</title>
+  <meta name="description" content="Join others pledging to buy the same product — once enough people join, everyone unlocks the group price." />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0071e3" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <a href="/" class="logo">PriceEdge</a>
+      <ul class="nav-links">
+        <li><a href="/brands.html">Brands</a></li>
+        <li><a href="/group-buys.html">Group Buys</a></li>
+        <li><a href="/#pricing">Pricing</a></li>
+        <li><a href="/account.html">My Account</a></li>
+      </ul>
+      <button type="button" class="install-app-btn" onclick="installApp()">Install App</button>
+      <a href="/#pricing" class="cta-button">Join Now</a>
+    </nav>
+  </header>
+
+  <section>
+    <div class="container">
+      <h2>Group Buys</h2>
+      <p class="section-subtitle">
+        Pledge to buy alongside others — no payment now. Once a deal hits its target headcount,
+        everyone who joined gets a group price and we follow up to arrange payment and delivery.
+      </p>
+      <div id="dealGrid" class="product-grid">
+        <p class="empty-state">Loading deals…</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">&copy; <span id="year"></span> PriceEdge. All rights reserved.</div>
+  </footer>
+
+  <!-- Pledge Modal -->
+  <div id="pledgeModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closePledgeModal()">&times;</button>
+      <h2 class="modal-title" id="pledgeDealName"></h2>
+      <div class="modal-price" id="pledgeDealPrice"></div>
+      <form id="pledgeForm">
+        <input type="hidden" id="pledgeDealId" />
+        <div class="form-group">
+          <label class="form-label" for="pledgeName">Full Name</label>
+          <input type="text" class="form-input" id="pledgeName" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pledgeEmail">Email Address</label>
+          <input type="email" class="form-input" id="pledgeEmail" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pledgeQuantity">Quantity</label>
+          <input type="number" class="form-input" id="pledgeQuantity" min="1" value="1" required />
+        </div>
+        <p class="fulfillment-notice">
+          No payment now — this is a pledge to buy. If the deal hits its target, we'll email you
+          and reach out on WhatsApp or phone to arrange payment and delivery.
+        </p>
+        <div class="modal-buttons">
+          <button type="button" class="btn-cancel" onclick="closePledgeModal()">Cancel</button>
+          <button type="submit" class="btn-continue" id="pledgeContinueBtn">Join This Deal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"><span id="toastMessage"></span></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    let deals = [];
+
+    function dealCardHtml(d) {
+      const pct = d.targetQty > 0 ? Math.min(100, Math.round((d.pledgedQty / d.targetQty) * 100)) : 0;
+      const savingsPercent =
+        d.retailPrice > 0 && d.groupPrice > 0 && d.groupPrice < d.retailPrice
+          ? Math.round((1 - d.groupPrice / d.retailPrice) * 100)
+          : null;
+
+      const statusLine = d.successful
+        ? `<span class="locked-price" style="color: var(--green); font-style: normal;">✅ Unlocked — target reached</span>`
+        : d.expired
+        ? `<span class="locked-price">Deadline passed — deal closed</span>`
+        : `<span class="locked-price">${d.pledgedQty} of ${d.targetQty} joined${d.deadline ? ` · closes ${d.deadline}` : ""}</span>`;
+
+      const canJoin = !d.expired;
+
+      return `
+        <div class="product-card">
+          ${d.imageUrl ? `<img src="${escapeHtmlAttr(d.imageUrl)}" alt="${escapeHtmlAttr(d.productName)}" />` : ""}
+          <div class="product-body">
+            <h3>${escapeHtmlAttr(d.productName)}</h3>
+            <div class="price-row">
+              ${d.retailPrice ? `<span class="retail-price">₦${d.retailPrice.toLocaleString()}</span>` : ""}
+              <span class="member-price">₦${d.groupPrice.toLocaleString()}</span>
+              ${savingsPercent ? `<span class="save-badge">Save ${savingsPercent}%</span>` : ""}
+            </div>
+            <div class="groupbuy-progress-track">
+              <div class="groupbuy-progress-fill" style="width: ${pct}%"></div>
+            </div>
+            <div style="margin-top: 8px;">${statusLine}</div>
+            ${
+              canJoin
+                ? `<button type="button" class="price-lock-btn" onclick="openPledgeModal('${escapeHtmlAttr(jsStringLiteral(d.id))}')">Join This Deal</button>`
+                : ""
+            }
+          </div>
+        </div>`;
+    }
+
+    async function loadDeals() {
+      const grid = document.getElementById("dealGrid");
+      try {
+        const res = await fetch("/api/group-buys");
+        deals = await res.json();
+
+        if (!res.ok) {
+          grid.innerHTML = `<p class="empty-state">Couldn't load deals: ${deals.error || res.statusText}</p>`;
+          return;
+        }
+
+        renderDeals();
+      } catch {
+        grid.innerHTML = '<p class="empty-state">Couldn\'t load deals. Try again shortly.</p>';
+      }
+    }
+
+    function renderDeals() {
+      const grid = document.getElementById("dealGrid");
+      if (!deals.length) {
+        grid.innerHTML = '<p class="empty-state">No group buys running right now — check back soon.</p>';
+        return;
+      }
+      grid.innerHTML = deals.map(dealCardHtml).join("");
+    }
+
+    function openPledgeModal(dealId) {
+      const deal = deals.find((d) => d.id === dealId);
+      if (!deal) return;
+
+      trackEvent("open_subscribe", { plan: "group_buy", detail: dealId });
+      document.getElementById("pledgeDealId").value = dealId;
+      document.getElementById("pledgeDealName").textContent = deal.productName;
+      document.getElementById("pledgeDealPrice").textContent = `₦${deal.groupPrice.toLocaleString()} group price`;
+      const storedEmail = getStoredMemberEmail();
+      if (storedEmail) document.getElementById("pledgeEmail").value = storedEmail;
+      document.getElementById("pledgeModal").classList.add("open");
+    }
+
+    function closePledgeModal() {
+      document.getElementById("pledgeModal").classList.remove("open");
+    }
+
+    async function handlePledgeSubmit(event) {
+      event.preventDefault();
+
+      const dealId = document.getElementById("pledgeDealId").value;
+      const name = document.getElementById("pledgeName").value.trim();
+      const email = document.getElementById("pledgeEmail").value.trim();
+      const quantity = Number(document.getElementById("pledgeQuantity").value) || 1;
+
+      const btn = document.getElementById("pledgeContinueBtn");
+      const originalText = btn.textContent;
+      btn.textContent = "Joining...";
+      btn.disabled = true;
+
+      trackEvent("start_checkout", { plan: "group_buy", provider: "pledge", detail: dealId, email });
+
+      try {
+        const res = await fetch(`/api/group-buys/${encodeURIComponent(dealId)}/pledge`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, quantity }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          setStoredMemberEmail(email);
+          trackEvent("complete_signup", { plan: "group_buy", provider: "pledge", detail: dealId, email });
+          showToast(data.unlocked ? "You're in — and this deal just hit its target!" : "You're in! We'll email you if this deal unlocks.");
+          closePledgeModal();
+          event.target.reset();
+
+          // Update from the pledge response itself rather than re-fetching —
+          // Google Sheets has a short read-after-write lag, so an immediate
+          // GET right after this can briefly return the pre-pledge count.
+          const deal = deals.find((d) => d.id === dealId);
+          if (deal) {
+            deal.pledgedQty = data.pledgedQty;
+            deal.successful = data.unlocked;
+            renderDeals();
+          }
+        } else {
+          showToast(data.error || "Couldn't join this deal.");
+        }
+      } catch {
+        showToast("Something went wrong. Try again shortly.");
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById("pledgeForm").addEventListener("submit", handlePledgeSubmit);
+
+    loadDeals();
+  </script>
+</body>
+</html>
