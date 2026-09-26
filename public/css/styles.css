@@ -88,6 +88,23 @@ a {
   background: var(--blue-dark);
 }
 
+.install-app-btn {
+  display: none;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  margin-right: 10px;
+}
+
+.install-app-btn:hover {
+  background: var(--bg-soft);
+}
+
 /* Hero */
 .hero {
   padding: 80px 0 60px;

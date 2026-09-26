@@ -141,6 +141,19 @@ you (or anyone) can open from any computer or phone:
 The Google Sheet stays the single source of truth either way — this just
 moves where the Node process itself runs, from your machine to Render's.
 
+## Installable as an app (PWA)
+
+The site is a PWA: `public/manifest.json` + `public/sw.js` (a minimal,
+network-first service worker — it never serves stale prices while online,
+only falls back to a cached shell if there's no connection at all) make it
+installable to a phone's home screen with its own icon, in standalone mode
+(no browser chrome). On Android/Chrome, an "Install App" button appears in
+the nav once the browser decides the page qualifies; on iOS/Safari there's
+no such event, so installing there is manual (Share → Add to Home Screen —
+worth telling users this explicitly, since otherwise it's not discoverable).
+The icons in `public/icons/` are a plain placeholder mark — swap them for a
+real logo whenever you have one; nothing else needs to change.
+
 ## What's intentionally missing (by design, for an MVP)
 
 - No password login — email lookup only (see above).

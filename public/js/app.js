@@ -1,5 +1,33 @@
 // Shared helpers used across pages: config loading, toasts, and the subscribe modal.
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+
+// Chrome/Android fire this instead of showing their own install UI immediately,
+// so we can show our own "Install App" button. Safari/iOS never fires this —
+// there, installing is manual via the browser's own "Add to Home Screen".
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  document.querySelectorAll(".install-app-btn").forEach((btn) => (btn.style.display = "inline-block"));
+});
+
+async function installApp() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.querySelectorAll(".install-app-btn").forEach((btn) => (btn.style.display = "none"));
+}
+
+window.addEventListener("appinstalled", () => {
+  document.querySelectorAll(".install-app-btn").forEach((btn) => (btn.style.display = "none"));
+});
+
 let appConfig = null;
 
 async function getConfig() {
