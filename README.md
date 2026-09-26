@@ -160,6 +160,35 @@ When pledges reach `TargetQty`, every pledger gets an email that the deal is
 on — that's it. Nothing is charged; you follow up off-platform to actually
 collect payment and arrange delivery, same as every other order in this MVP.
 
+## Group buy recommendations (`/admin-insights.html`)
+
+A read-only page — not linked from the site's nav, so treat the URL as
+private — that scores each product on real demand signal to help you decide
+what to launch a group buy on next. It never creates a group buy itself;
+you still pick the price, target quantity, and deadline by hand.
+
+The score (0-100) is built only from signals that are actually product-level:
+
+- **Product views** — a new `view_product` event fires once per product card
+  shown on a brand page, tagged `locked`/`unlocked` in its `Provider` field.
+- **Locked views specifically** — the subset of the above where the viewer
+  couldn't see the real price (a non-member, or a free member on a
+  non-sample product) — a stronger "wants it but can't buy it yet" signal.
+- **Unique interested users** — distinct emails among those viewers (an
+  anonymous visitor with no stored email won't be counted here — a known
+  undercount, not a bug).
+- **Price-lock actions** — an existing member locking in today's price is
+  real purchase intent, weighted in too.
+
+`BrandRequests` (see above) is deliberately *not* folded into the score — it's
+keyed by brand name, not product, so blending it in would misattribute a
+brand's demand evenly across every product under it. It's shown as separate
+per-brand context instead. Everything is windowed to `GROUP_BUY_LOOKBACK_DAYS`
+(default 45) and excludes any product already in an active group buy. The
+normalization caps in `server.js` (`GROUP_BUY_SCORE_CAPS`) are tuned low for
+a pre-launch site with little traffic — revisit them once you have real
+volume, or everything will read close to 100.
+
 ## Installable as an app (PWA)
 
 The site is a PWA: `public/manifest.json` + `public/sw.js` (a minimal,

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Group Buy Insights - PriceEdge</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    table { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--gray); }
+    .score-cell { font-weight: 700; font-size: 16px; }
+    .score-high { color: var(--green); }
+    .score-mid { color: var(--blue); }
+    .score-low { color: var(--gray); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <nav class="nav">
+      <a href="/" class="logo">PriceEdge</a>
+      <a href="/" style="font-size: 14px;">&larr; Back to site</a>
+    </nav>
+  </header>
+
+  <section>
+    <div class="container">
+      <h2>Group Buy Insights</h2>
+      <p class="section-subtitle">
+        Not a recommendation engine that acts on its own — this only surfaces which products show real
+        demand signal (page views, price-lock actions, unique interested visitors) over the last
+        <span id="lookbackDays">45</span> days. You still decide the price, target quantity, and deadline,
+        and create the group buy yourself in the <code>GroupBuys</code> sheet tab. Products already running
+        a group buy are excluded. Internal page — not linked from the site, no data here beyond aggregate
+        counts (no visitor emails shown).
+      </p>
+      <div id="insightsContainer">
+        <p class="empty-state">Loading…</p>
+      </div>
+    </div>
+  </section>
+
+  <script src="/js/app.js"></script>
+  <script>
+    function scoreClass(score) {
+      if (score >= 60) return "score-high";
+      if (score >= 30) return "score-mid";
+      return "score-low";
+    }
+
+    async function loadInsights() {
+      const container = document.getElementById("insightsContainer");
+      try {
+        const res = await fetch("/api/admin/group-buy-insights");
+        const data = await res.json();
+
+        if (!res.ok) {
+          container.innerHTML = `<p class="empty-state">Couldn't load insights: ${data.error || res.statusText}</p>`;
+          return;
+        }
+
+        document.getElementById("lookbackDays").textContent = data.lookbackDays;
+
+        if (!data.insights.length) {
+          container.innerHTML = '<p class="empty-state">No product activity yet in this window — check back once there\'s some real traffic.</p>';
+          return;
+        }
+
+        const rows = data.insights
+          .map(
+            (p) => `
+              <tr>
+                <td>
+                  <strong>${escapeHtmlAttr(p.name)}</strong><br />
+                  <span style="color: var(--gray); font-size: 12px;">${escapeHtmlAttr(p.brandName || p.brandSlug)}</span>
+                </td>
+                <td class="score-cell ${scoreClass(p.score)}">${p.score}</td>
+                <td class="num">${p.views}</td>
+                <td class="num">${p.lockedViews}</td>
+                <td class="num">${p.uniqueUsers}</td>
+                <td class="num">${p.lockPriceCount}</td>
+                <td class="num">${p.brandRequestCount}</td>
+                <td class="num">${p.suggestedTargetQty}</td>
+              </tr>`
+          )
+          .join("");
+
+        container.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Score</th>
+                <th class="num">Views</th>
+                <th class="num">Locked views</th>
+                <th class="num">Unique users</th>
+                <th class="num">Price locks</th>
+                <th class="num">Brand requests</th>
+                <th class="num">Suggested target</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>`;
+      } catch {
+        container.innerHTML = '<p class="empty-state">Couldn\'t load insights. Try again shortly.</p>';
+      }
+    }
+
+    loadInsights();
+  </script>
+</body>
+</html>

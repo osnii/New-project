@@ -54,7 +54,7 @@
     const params = new URLSearchParams(window.location.search);
     const slug = params.get("slug");
 
-    async function loadProducts() {
+    async function loadProducts(trackViews = true) {
       const grid = document.getElementById("productGrid");
       const heading = document.getElementById("brandHeading");
 
@@ -117,6 +117,21 @@
               </div>`;
           })
           .join("");
+
+        // One event per product card actually shown, tagged locked/unlocked —
+        // feeds the group-buy recommendation scoring (see /admin-insights.html).
+        // Only on the real page view, not the refresh after locking a price —
+        // otherwise every lock action re-logs a "view" for the whole grid.
+        if (trackViews) {
+          data.products.forEach((p) => {
+            trackEvent("view_product", {
+              detail: p.id,
+              brandSlug: slug,
+              provider: p.memberPrice ? "unlocked" : "locked",
+              email,
+            });
+          });
+        }
       } catch {
         grid.innerHTML = '<p class="empty-state">Couldn\'t load products. Try again shortly.</p>';
       }
@@ -144,7 +159,7 @@
         if (data.success) {
           trackEvent("lock_price", { email, brandSlug: slug, detail: productId });
           showToast(`Price locked until ${data.expiresAt}.`);
-          loadProducts();
+          loadProducts(false);
         } else {
           showToast(data.error || "Couldn't lock this price.");
           btn.textContent = originalText;

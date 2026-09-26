@@ -29,6 +29,11 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const REFERRAL_REWARD_NAIRA = Number(process.env.REFERRAL_REWARD_NAIRA) || 500;
 const PRICE_LOCK_DAYS = Number(process.env.PRICE_LOCK_DAYS) || 14;
+const GROUP_BUY_LOOKBACK_DAYS = Number(process.env.GROUP_BUY_LOOKBACK_DAYS) || 45;
+// Normalizes raw counts into a 0-100 score for the group-buy recommendation
+// view. Tuned low for a pre-launch site with little traffic yet — revisit
+// once you have real volume, or a handful of products will all read ~100.
+const GROUP_BUY_SCORE_CAPS = { views: 50, lockedViews: 30, uniqueUsers: 20, lockPriceActions: 10 };
 
 // Squad has no client-side checkout widget: the frontend redirects the
 // browser to a hosted page and Squad redirects back to our callback with a
@@ -834,6 +839,96 @@ app.post("/api/group-buys/:id/pledge", express.json(), async (req, res) => {
   } catch (err) {
     console.error("Error recording group buy pledge:", err.message);
     res.status(500).json({ success: false, error: "Could not join this group buy" });
+  }
+});
+
+// ---- Group buy recommendations (read-only — never creates a group buy) ----
+//
+// Scores each product on real, product-level signals only: view_product
+// events (fired once per product card shown on a brand page, tagged
+// locked/unlocked) and lock_price actions (a paid member locking in today's
+// price — strong purchase intent). Deliberately excludes BrandRequests from
+// the numeric score since that tab is keyed by brand name, not product —
+// blending it in would misattribute a brand's demand evenly across every
+// product under it. Shown instead as separate per-brand context. This is a
+// read-only recommendation list — deciding price, target quantity, and
+// deadline, and actually creating the GroupBuys row, stays a human call.
+app.get("/api/admin/group-buy-insights", async (req, res) => {
+  try {
+    const [events, products, brands, brandRequests, groupBuys] = await Promise.all([
+      readRows("Events"),
+      readRows("Products"),
+      readRows("Brands"),
+      readRows("BrandRequests"),
+      readRows("GroupBuys"),
+    ]);
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - GROUP_BUY_LOOKBACK_DAYS);
+    const recentEvents = events.filter((e) => {
+      const ts = new Date(e.Timestamp);
+      return !isNaN(ts) && ts >= cutoff;
+    });
+
+    const activeGroupBuyProductIds = new Set(
+      groupBuys.filter((g) => (g.Status || "").toLowerCase() !== "cancelled").map((g) => g.ProductID)
+    );
+
+    const viewEvents = recentEvents.filter((e) => e.Event === "view_product");
+    const lockEvents = recentEvents.filter((e) => e.Event === "lock_price");
+
+    const brandNameBySlug = new Map(brands.map((b) => [(b.Slug || "").toLowerCase(), b.Name]));
+    const brandRequestCounts = new Map(
+      brandRequests.map((r) => [(r.BrandName || "").toLowerCase(), Number(r.RequestCount) || 0])
+    );
+
+    const normalize = (value, cap) => Math.min(value / cap, 1) * 100;
+
+    const insights = products
+      .filter(
+        (p) => (p.Active || "").toLowerCase() !== "false" && !activeGroupBuyProductIds.has(p.ProductID)
+      )
+      .map((p) => {
+        const productViews = viewEvents.filter((e) => e.Detail === p.ProductID);
+        const lockedViewCount = productViews.filter((e) => (e.Provider || "").toLowerCase() === "locked").length;
+        const uniqueUsers = new Set(productViews.map((e) => (e.Email || "").toLowerCase()).filter(Boolean)).size;
+        const lockPriceCount = lockEvents.filter((e) => e.Detail === p.ProductID).length;
+        const views = productViews.length;
+
+        const score = Math.round(
+          normalize(views, GROUP_BUY_SCORE_CAPS.views) * 0.35 +
+            normalize(lockedViewCount, GROUP_BUY_SCORE_CAPS.lockedViews) * 0.3 +
+            normalize(uniqueUsers, GROUP_BUY_SCORE_CAPS.uniqueUsers) * 0.2 +
+            normalize(lockPriceCount, GROUP_BUY_SCORE_CAPS.lockPriceActions) * 0.15
+        );
+
+        const brandName = brandNameBySlug.get((p.BrandSlug || "").toLowerCase()) || "";
+
+        return {
+          productId: p.ProductID,
+          name: p.Name,
+          brandSlug: p.BrandSlug || "",
+          brandName,
+          retailPrice: Number(p.RetailPrice) || 0,
+          memberPrice: Number(p.MemberPrice) || 0,
+          score,
+          views,
+          lockedViews: lockedViewCount,
+          uniqueUsers,
+          lockPriceCount,
+          brandRequestCount: brandRequestCounts.get(brandName.toLowerCase()) || 0,
+          // Rough starting point tied to interested unique users, not a real
+          // forecast — round number, floored at a sane minimum. Adjust freely.
+          suggestedTargetQty: Math.max(5, Math.ceil(uniqueUsers / 5) * 5),
+        };
+      })
+      .filter((p) => p.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    res.json({ lookbackDays: GROUP_BUY_LOOKBACK_DAYS, insights });
+  } catch (err) {
+    console.error("Error computing group buy insights:", err.message);
+    res.status(500).json({ error: "Could not compute insights" });
   }
 });
 
