@@ -257,7 +257,10 @@ on-platform checkout), so don't tighten the wording to imply more than the
 app currently does without updating the actual flow to match.
 
 **Cancellation** has no self-service UI yet — the policy says so explicitly
-and directs members to email `SMTP_USER` to cancel renewal. For a Paystack
+and directs members to email `SMTP_USER` or message the WhatsApp number
+hardcoded into `policies.html`/`account.html` (`wa.me/2347054600639`) to
+cancel renewal. If that number ever changes, it's a plain-text string in
+both files — no env var, just find-and-replace. For a Paystack
 member, actually disabling the subscription still needs a real action on
 your end (Paystack dashboard, or their API) — the existing
 `/api/paystack/webhook` handler already sets `Status: Cancelled` in Members
