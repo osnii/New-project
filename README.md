@@ -48,7 +48,7 @@ correct headers) automatically if they don't already exist:
 
 **Products** (`Category` here is the product's category within its brand,
 e.g. "Televisions" — unrelated to the brand's own Category above)
-`ProductID | BrandSlug | Name | Category | RetailPrice | MemberPrice | BuyPrice | Supplier | GrossProfit | ImageURL | Description | Active | FreeAccess`
+`ProductID | BrandSlug | Name | Category | RetailPrice | MemberPrice | BuyPrice | Supplier | GrossProfit | ImageURL | Description | Active | FreeAccess | RetailPriceCheckedAt`
 
 `BuyPrice`, `Supplier`, and `GrossProfit` are for your own cost/margin
 tracking — the app never reads or exposes them; they're not part of the API
@@ -56,6 +56,14 @@ response. Fill them in as you lock down real supplier pricing. `FreeAccess`
 (`TRUE`/`FALSE`) marks a small curated sample that no-payment "Free" members
 (see `/api/subscribe/free`) can see at member pricing — everything else stays
 locked for them to nudge the upgrade to a paid plan.
+
+`RetailPriceCheckedAt` (`YYYY-MM-DD`) is when you last verified that
+product's `RetailPrice` is still accurate. It powers the homepage savings
+claim (see below) — set it every time you touch `RetailPrice`, or that
+product silently drops out of the savings range once it's older than
+`RETAIL_PRICE_MAX_AGE_DAYS` (default 30). Blank counts as never-verified,
+which also excludes it — on a fresh install, the savings section stays
+hidden until you set this for at least one product.
 
 **Members** (the backend writes to this one as people subscribe)
 `MemberID | Name | Email | Phone | Role | BusinessName | Plan | AmountPaid | StartDate | RenewalDate | Status | PaymentProvider | PaymentReference | ReferredBy | ReferralCount | ReferralCredits`
@@ -169,7 +177,10 @@ prices can be X-Y% below comparable retail prices on selected products,"
 with a methodology note underneath. Deliberately a range across the whole
 catalog, not any single product's exact numbers — showing one product's
 precise percentage next to its already-public retail price would let
-anyone back out its exact (still-gated) member price.
+anyone back out its exact (still-gated) member price. Only counts products
+whose `RetailPriceCheckedAt` is within `RETAIL_PRICE_MAX_AGE_DAYS` — see the
+Products schema note above. This is what keeps the claim honest over time
+without you having to remember to update the homepage itself.
 
 ## Group buy recommendations (`/admin-insights.html`)
 

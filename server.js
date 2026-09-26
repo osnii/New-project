@@ -29,6 +29,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const REFERRAL_REWARD_NAIRA = Number(process.env.REFERRAL_REWARD_NAIRA) || 500;
 const PRICE_LOCK_DAYS = Number(process.env.PRICE_LOCK_DAYS) || 14;
+const RETAIL_PRICE_MAX_AGE_DAYS = Number(process.env.RETAIL_PRICE_MAX_AGE_DAYS) || 30;
 const GROUP_BUY_LOOKBACK_DAYS = Number(process.env.GROUP_BUY_LOOKBACK_DAYS) || 45;
 // Normalizes raw counts into a 0-100 score for the group-buy recommendation
 // view. Tuned low for a pre-launch site with little traffic yet — revisit
@@ -188,12 +189,22 @@ async function creditReferralReward({ referredBy, newMemberEmail, amountPaid }) 
 // Powers the homepage's savings claim with a real, conservative range across
 // the current catalog — never the reverse-engineerable exact price of any
 // one product. Both bounds are rounded DOWN to the nearest 5%, so the stated
-// range never overstates what a member actually gets.
+// range never overstates what a member actually gets. A product only counts
+// if its RetailPrice was verified within RETAIL_PRICE_MAX_AGE_DAYS — missing
+// or stale verification silently drops it from the range rather than
+// letting an unchecked price quietly undermine the claim's credibility.
 app.get("/api/savings-summary", async (req, res) => {
   try {
     const products = await readRows("Products");
+    const maxAgeCutoff = new Date();
+    maxAgeCutoff.setDate(maxAgeCutoff.getDate() - RETAIL_PRICE_MAX_AGE_DAYS);
+
     const percents = products
       .filter((p) => (p.Active || "").toLowerCase() !== "false")
+      .filter((p) => {
+        const checkedAt = new Date(p.RetailPriceCheckedAt);
+        return !isNaN(checkedAt) && checkedAt >= maxAgeCutoff;
+      })
       .map((p) => {
         const retail = Number(p.RetailPrice) || 0;
         const member = Number(p.MemberPrice) || 0;

@@ -12,7 +12,8 @@
     "ImageURL": "",
     "Description": "43-inch 4K UHD Smart TV.",
     "Active": "TRUE",
-    "FreeAccess": "TRUE"
+    "FreeAccess": "TRUE",
+    "RetailPriceCheckedAt": ""
   },
   {
     "ProductID": "P002",
@@ -27,7 +28,8 @@
     "ImageURL": "",
     "Description": "300-litre double door refrigerator.",
     "Active": "TRUE",
-    "FreeAccess": "FALSE"
+    "FreeAccess": "FALSE",
+    "RetailPriceCheckedAt": ""
   },
   {
     "ProductID": "P003",
@@ -42,7 +44,8 @@
     "ImageURL": "",
     "Description": "43-inch 4K UHD Smart TV.",
     "Active": "TRUE",
-    "FreeAccess": "FALSE"
+    "FreeAccess": "FALSE",
+    "RetailPriceCheckedAt": ""
   },
   {
     "ProductID": "P004",
@@ -57,6 +60,7 @@
     "ImageURL": "",
     "Description": "Noise-cancelling wireless headphones.",
     "Active": "TRUE",
-    "FreeAccess": "TRUE"
+    "FreeAccess": "TRUE",
+    "RetailPriceCheckedAt": ""
   }
 ]
