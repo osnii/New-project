@@ -10,10 +10,13 @@ database, no password auth — just enough to validate the idea.
 - **Catalog & members live in a Google Sheet.** One spreadsheet, three tabs:
   `Brands`, `Products`, `Members`. Add/edit brands and products by editing the
   sheet directly; the `Members` tab fills up automatically as people subscribe.
-- **Two payment options at checkout: Paystack or Squad.** Three plan tiers
-  (Basic/Pro/Elite), each with a monthly and an annual price (annual is 10x
-  monthly — 2 months free, an untested starting guess, not settled pricing)
-  either way. They work differently under the hood:
+- **Two payment options at checkout: Paystack or Squad.** One paid plan
+  (Basic, ₦5,000/month), with a monthly and an annual price (annual is 10x
+  monthly — 2 months free, an untested starting guess, not settled pricing).
+  Pro/Elite existed earlier and were dropped after an external commercial
+  review pointed out they unlocked the identical catalog as Basic with no
+  enforced difference beyond price — see the tier-gating backlog note below
+  before reintroducing higher tiers. They work differently under the hood:
   - **Paystack** auto-bills the member's card every month on its own (its
     "Plan" feature) — no extra work from us after signup.
   - **Squad has no equivalent auto-billing plan.** Checkout is a one-off
@@ -26,13 +29,22 @@ database, no password auth — just enough to validate the idea.
   Either path verifies the payment server-side, appends a row to `Members`
   with which `PaymentProvider` was used, and emails the member a
   confirmation.
-- **Access is gated by email**, not a password. A visitor who subscribed (or
-  who looks up their email on `/account.html`) has their email saved in
-  `localStorage`; the brand pages send that email to the API, which checks the
-  `Members` tab for an `Active` row before revealing member pricing. This is
-  intentionally weak (anyone who knows a member's email can view their
-  pricing) — good enough to demo the model, not to launch publicly. Swap in
-  real auth (magic link or OTP) before going live.
+- **Brand-page pricing is gated by email**, not a password. A visitor who
+  subscribed has their email saved in `localStorage`; the brand pages send
+  that email to the API, which checks the `Members` tab for an `Active` row
+  before revealing member pricing. This is intentionally weak (anyone who
+  knows a member's email can view their pricing) — a deliberate, scoped
+  trade-off: seeing a discounted price is low-stakes compared to seeing PII,
+  so it stays a lightweight lookup rather than gaining the login-link flow
+  described next.
+- **`/account.html` (name, plan, renewal date, referral credits) requires a
+  magic-link sign-in**, not a password. Enter your email, get emailed a
+  15-minute link, click it, and the browser holds a 30-day session token
+  (`MAGIC_LINK_SECRET`-signed, see below) so you're not re-verifying on every
+  visit. This was flagged twice by external reviews as the platform's most
+  concrete security gap (anyone who knew a member's email could view their
+  account data) — fixed for account data specifically; the pricing-unlock
+  flow above stays as-is by design, per the trade-off noted above.
 
 ## Google Sheet setup
 
@@ -231,20 +243,21 @@ worth telling users this explicitly, since otherwise it's not discoverable).
 The icons in `public/icons/` are a plain placeholder mark — swap them for a
 real logo whenever you have one; nothing else needs to change.
 
-## Future feature: tier-based catalogue/access rules — validate before building
+## Future feature: multi-tier catalogue/access rules — validate before building
 
-Basic/Pro/Elite currently unlock the *identical* catalog — the only real
-difference between them is price. The homepage copy says this explicitly
-now, on purpose, after an external commercial review found the previous
-copy ("20+ deals" / "full catalog" / "priority support") promised
-differentiation the code didn't enforce. Before building real per-tier
-gating (a `MinPlanTier` column on Products, gating logic in
-`/api/brands/:slug/products`), validate it's the right lever first: are
-Basic members buying enough that limiting their catalog would hurt
-conversion? Do customers care about catalog breadth, or would priority
-sourcing/support matter more? Is a natural professional/business tier
-emerging from real usage? Catalogue gating might turn out to be the wrong
-monetization mechanism entirely — don't build it on a guess.
+Pro and Elite existed earlier at the same price of admission as Basic (same
+catalog, no enforced difference) and were dropped entirely rather than kept
+around as unsellable upsells — a second external review pushed this past
+"be honest about it in the copy" (the previous fix) to "don't offer it at
+all until it's real." Before reintroducing a second paid tier — whether
+that's a `MinPlanTier` column on Products gating `/api/brands/:slug
+/products`, or something else entirely like priority sourcing/support —
+validate the lever first: are Basic members buying enough that a second
+tier's absence is actually costing conversions? Do customers care about
+catalog breadth, or would priority sourcing/support matter more? Is a
+natural professional/business tier emerging from real usage? Catalogue
+gating might turn out to be the wrong monetization mechanism entirely —
+don't build it on a guess twice.
 
 ## Policies (`/policies.html`) and the refund guarantee
 
@@ -291,9 +304,38 @@ then process the actual refund (Paystack/Squad dashboard) and update
 `Status` yourself — same manual-review pattern as `ContractorLeads` and
 `BrandRequests`.
 
+## Magic-link account sign-in
+
+`/account.html` no longer trusts a bare email — it requires proof you
+control that inbox:
+
+1. `POST /api/auth/request-link` — always responds `{ success: true }`
+   whether or not that email has an account (a different response would leak
+   who's registered); if it does, emails a link containing a signed,
+   15-minute token.
+2. Clicking the link hits `/account.html?token=...`, which the page trades
+   via `GET /api/auth/verify` for a longer-lived (30-day) session token,
+   stored in `localStorage` alongside the email — so you're not re-verifying
+   on every visit, just once every 30 days or after signing out.
+3. `GET /api/account` now requires both `email` and a valid `token` matching
+   it; a missing/expired/forged token gets a 401, not the account data.
+
+Both token types use the same HMAC scheme (`signToken`/`verifyToken` in
+`server.js`) and differ only in how long they're valid for. Signed with
+`MAGIC_LINK_SECRET` — if you don't set one, the server generates a random
+one at boot, which means every outstanding link and session is invalidated
+on each restart (Render redeploys included). Set a real fixed value in
+production so members aren't logged out on every deploy.
+
+This is deliberately scoped to account data only. Brand-page member pricing
+still unlocks on a bare stored email, unchanged — see the note above on why
+that's an acceptable, intentional difference in strictness rather than an
+oversight.
+
 ## What's intentionally missing (by design, for an MVP)
 
-- No password login — email lookup only (see above).
+- No password login — magic-link sign-in for account data, plain email
+  lookup for brand-page pricing (see above for why those differ).
 - Squad signups in progress are tracked in an in-memory map (not the Sheet),
   so a server restart between "customer starts Squad checkout" and "customer
   is redirected back" loses that pending signup. If it happens, the customer

@@ -100,11 +100,40 @@ function setStoredMemberEmail(email) {
   }
 }
 
+// Session token proving a member clicked their magic-link sign-in email —
+// required by /api/account so viewing someone's plan/renewal/referral
+// credits needs more than just guessing their email. Unrelated to
+// getStoredMemberEmail above, which just recognizes a returning visitor for
+// member-pricing display and stays a lighter-weight, lower-stakes lookup.
+function getStoredSessionToken() {
+  try {
+    return localStorage.getItem("priceedge_session_token") || "";
+  } catch {
+    return "";
+  }
+}
+
+function setStoredSessionToken(token) {
+  try {
+    localStorage.setItem("priceedge_session_token", token);
+  } catch {
+    // ignore — worst case, the member has to click their login link again
+  }
+}
+
+function clearStoredSessionToken() {
+  try {
+    localStorage.removeItem("priceedge_session_token");
+  } catch {
+    // ignore
+  }
+}
+
 // Monthly/annual pricing toggle on the homepage. A bare tier name ("basic")
 // resolves to "basic_annual" when Annual is selected; an already-specific
 // key (e.g. from a direct link) passes through unchanged.
 let selectedBillingPeriod = "month";
-const PLAN_TIERS = ["basic", "pro", "elite"];
+const PLAN_TIERS = ["basic"];
 
 function resolvePlanKey(tier) {
   return selectedBillingPeriod === "year" && PLAN_TIERS.includes(tier) ? `${tier}_annual` : tier;

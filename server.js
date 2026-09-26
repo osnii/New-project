@@ -3,6 +3,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 
 import { readRows, appendRow, updateRowWhere } from "./lib/sheetsClient.js";
@@ -23,11 +24,59 @@ import {
   notifyReferralReward,
   sendGroupBuySuccessEmail,
   notifyAdminOfRefundRequest,
+  sendLoginLinkEmail,
 } from "./lib/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Signs magic-link/session tokens for /account.html. If unset, generated
+// fresh at boot — fine for testing, but it means every outstanding login
+// link and session is invalidated on each restart (Render redeploys
+// included). Set a real fixed MAGIC_LINK_SECRET in production.
+const MAGIC_LINK_SECRET = process.env.MAGIC_LINK_SECRET || crypto.randomBytes(32).toString("hex");
+if (!process.env.MAGIC_LINK_SECRET) {
+  console.warn(
+    "MAGIC_LINK_SECRET not set — using a random secret generated at startup. " +
+      "Login links/sessions won't survive a server restart until you set a real one."
+  );
+}
+const LOGIN_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutes to click the emailed link
+const SESSION_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, stored client-side after verifying
+
+// Same signing scheme for both the short-lived emailed link and the
+// longer-lived session kept in the browser after verifying it — both just
+// prove "this request controls that email address," differing only in TTL.
+// Email is base64url-encoded (not the delimiter) since a raw address
+// contains dots, which would otherwise collide with the token's own dot
+// separators.
+function signToken(email, expiresAt) {
+  const emailB64 = Buffer.from(email.toLowerCase()).toString("base64url");
+  const payload = `${emailB64}.${expiresAt}`;
+  const hmac = crypto.createHmac("sha256", MAGIC_LINK_SECRET).update(payload).digest("hex");
+  return `${payload}.${hmac}`;
+}
+
+function verifyToken(token) {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+
+  const [emailB64, expiresAtStr, hmac] = parts;
+  const payload = `${emailB64}.${expiresAtStr}`;
+  const expectedHmac = crypto.createHmac("sha256", MAGIC_LINK_SECRET).update(payload).digest("hex");
+  if (hmac !== expectedHmac) return null;
+
+  const expiresAt = Number(expiresAtStr);
+  if (!expiresAt || Date.now() > expiresAt) return null;
+
+  try {
+    return { email: Buffer.from(emailB64, "base64url").toString("utf8") };
+  } catch {
+    return null;
+  }
+}
 const REFERRAL_REWARD_NAIRA = Number(process.env.REFERRAL_REWARD_NAIRA) || 500;
 const PRICE_LOCK_DAYS = Number(process.env.PRICE_LOCK_DAYS) || 14;
 const RETAIL_PRICE_MAX_AGE_DAYS = Number(process.env.RETAIL_PRICE_MAX_AGE_DAYS) || 30;
@@ -646,9 +695,74 @@ app.post("/api/price-lock", express.json(), async (req, res) => {
   }
 });
 
+// ---- Magic-link sign-in for /account.html ----
+
+// Always responds success regardless of whether that email has an account —
+// otherwise the response itself would leak which emails are registered.
+app.post("/api/auth/request-link", express.json(), async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ success: false, error: "Email is required" });
+
+  try {
+    const members = await readRows("Members");
+    const member = members.find((m) => (m.Email || "").toLowerCase() === String(email).toLowerCase());
+
+    if (member) {
+      const token = signToken(member.Email, Date.now() + LOGIN_LINK_TTL_MS);
+      const siteUrl = process.env.APP_BASE_URL || "http://localhost:5000";
+      const link = `${siteUrl}/account.html?token=${token}`;
+      sendLoginLinkEmail({ to: member.Email, name: member.Name, link }); // fire-and-forget
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error requesting login link:", err.message);
+    res.status(500).json({ success: false, error: "Could not send login link" });
+  }
+});
+
+// Exchanges a short-lived emailed link token for a longer-lived session
+// token the browser holds onto, so a member isn't emailing themselves a new
+// link on every visit.
+app.get("/api/auth/verify", async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).json({ success: false, error: "Missing token" });
+
+  const verified = verifyToken(token);
+  if (!verified) {
+    return res.status(401).json({ success: false, error: "This login link is invalid or has expired" });
+  }
+
+  try {
+    const members = await readRows("Members");
+    const member = members.find((m) => (m.Email || "").toLowerCase() === verified.email.toLowerCase());
+    if (!member) return res.status(404).json({ success: false, error: "No membership found for that email" });
+
+    const sessionToken = signToken(member.Email, Date.now() + SESSION_TOKEN_TTL_MS);
+    res.json({ success: true, email: member.Email, sessionToken });
+  } catch (err) {
+    console.error("Error verifying login link:", err.message);
+    res.status(500).json({ success: false, error: "Could not verify login link" });
+  }
+});
+
+// Real account data (name, plan, renewal, referral credits) now requires a
+// signed token proving the caller clicked a magic-link email to that
+// address — plain knowledge of the email is no longer sufficient. This is
+// deliberately scoped to account data specifically; brand-page member
+// pricing still unlocks on a bare stored email (see /api/brands/:slug
+// /products) since that's lower-stakes than exposing PII/account details,
+// and locking it down the same way would mean a login-link flow before
+// ever seeing a price, which is a much bigger UX change than fixing the
+// actual security gap that was flagged.
 app.get("/api/account", async (req, res) => {
-  const { email } = req.query;
-  if (!email) return res.status(400).json({ error: "Email is required" });
+  const { email, token } = req.query;
+  if (!email || !token) return res.status(400).json({ error: "Email and token are required" });
+
+  const verified = verifyToken(token);
+  if (!verified || verified.email.toLowerCase() !== String(email).toLowerCase()) {
+    return res.status(401).json({ error: "Please sign in again — your session may have expired" });
+  }
 
   try {
     const members = await readRows("Members");

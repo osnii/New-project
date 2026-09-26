@@ -30,16 +30,20 @@
   <section>
     <div class="container">
       <h2>My Account</h2>
-      <p class="section-subtitle">
-        Enter the email you subscribed with to view your membership.
+      <p class="section-subtitle" id="accountIntro">
+        Enter the email you subscribed with — we'll email you a link to sign in, no password needed.
       </p>
 
       <div class="account-box">
-        <div class="form-group">
-          <label class="form-label" for="lookupEmail">Email Address</label>
-          <input type="email" class="form-input" id="lookupEmail" placeholder="you@example.com" />
+        <div id="loginForm">
+          <div class="form-group">
+            <label class="form-label" for="lookupEmail">Email Address</label>
+            <input type="email" class="form-input" id="lookupEmail" placeholder="you@example.com" />
+          </div>
+          <button class="btn-primary" style="width: 100%" id="requestLinkBtn" onclick="requestLoginLink()">
+            Email Me a Sign-In Link
+          </button>
         </div>
-        <button class="btn-primary" style="width: 100%" onclick="lookupAccount()">View My Account</button>
 
         <div id="accountDetails" style="margin-top: 24px; display: none">
           <div class="account-row"><span>Name</span><strong id="accName"></strong></div>
@@ -59,6 +63,9 @@
             message us on <a href="https://wa.me/2347054600639" target="_blank" rel="noopener">WhatsApp</a> —
             see our <a href="/policies.html">policies page</a> for full terms.
           </p>
+          <button type="button" class="btn-cancel" style="width: 100%; margin-top: 10px;" onclick="signOut()">
+            Sign Out
+          </button>
         </div>
       </div>
     </div>
@@ -114,30 +121,67 @@
     const stored = getStoredMemberEmail();
     if (stored) document.getElementById("lookupEmail").value = stored;
 
-    async function lookupAccount() {
+    async function requestLoginLink() {
       const email = document.getElementById("lookupEmail").value.trim();
       if (!email) {
         showToast("Enter an email address first.");
         return;
       }
 
+      const btn = document.getElementById("requestLinkBtn");
+      const originalText = btn.textContent;
+      btn.textContent = "Sending...";
+      btn.disabled = true;
+
       try {
-        const res = await fetch(`/api/account?email=${encodeURIComponent(email)}`);
+        const res = await fetch("/api/auth/request-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          setStoredMemberEmail(email);
+          // Deliberately the same message whether or not that email has an
+          // account — a different one here would leak who's registered.
+          document.getElementById("accountIntro").textContent =
+            "If that email has a PriceEdge membership, we've sent a sign-in link — check your inbox.";
+          document.getElementById("loginForm").style.display = "none";
+        } else {
+          showToast(data.error || "Couldn't send a sign-in link.");
+        }
+      } catch {
+        showToast("Something went wrong. Try again shortly.");
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    async function loadAccount(email, sessionToken) {
+      try {
+        const res = await fetch(`/api/account?email=${encodeURIComponent(email)}&token=${encodeURIComponent(sessionToken)}`);
+
+        if (res.status === 401) {
+          clearStoredSessionToken();
+          document.getElementById("loginForm").style.display = "block";
+          return;
+        }
         if (res.status === 404) {
           showToast("No membership found for that email.");
-          document.getElementById("accountDetails").style.display = "none";
+          clearStoredSessionToken();
+          document.getElementById("loginForm").style.display = "block";
           return;
         }
 
         const data = await res.json();
-
         if (!res.ok) {
           showToast(data.error || "Couldn't load your account.");
           return;
         }
 
-        setStoredMemberEmail(email);
-
+        document.getElementById("accountIntro").style.display = "none";
         document.getElementById("accName").textContent = data.name;
         document.getElementById("accRole").textContent = data.role === "contractor" ? "Contractor / Wholesale Distributor" : "Customer";
         document.getElementById("accPlan").textContent = data.plan;
@@ -166,6 +210,47 @@
       } catch {
         showToast("Couldn't load your account. Try again shortly.");
       }
+    }
+
+    async function handleTokenFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const linkToken = params.get("token");
+      if (!linkToken) return false;
+
+      // Strip the token from the URL immediately either way — it's single-use
+      // in spirit and shouldn't linger in browser history/referrers.
+      window.history.replaceState({}, "", "/account.html");
+
+      try {
+        const res = await fetch(`/api/auth/verify?token=${encodeURIComponent(linkToken)}`);
+        const data = await res.json();
+
+        if (!data.success) {
+          showToast(data.error || "This link is invalid or expired — request a new one.");
+          return false;
+        }
+
+        setStoredMemberEmail(data.email);
+        setStoredSessionToken(data.sessionToken);
+        document.getElementById("lookupEmail").value = data.email;
+        showToast("Signed in!");
+        await loadAccount(data.email, data.sessionToken);
+        return true;
+      } catch {
+        showToast("Something went wrong verifying your link. Try again shortly.");
+        return false;
+      }
+    }
+
+    function signOut() {
+      clearStoredSessionToken();
+      document.getElementById("accountDetails").style.display = "none";
+      document.getElementById("accountActions").style.display = "none";
+      document.getElementById("accountIntro").style.display = "block";
+      document.getElementById("accountIntro").textContent =
+        "Enter the email you subscribed with — we'll email you a link to sign in, no password needed.";
+      document.getElementById("loginForm").style.display = "block";
+      showToast("Signed out.");
     }
 
     function openRefundModal() {
@@ -215,7 +300,16 @@
 
     document.getElementById("refundForm").addEventListener("submit", handleRefundSubmit);
 
-    if (stored) lookupAccount();
+    (async () => {
+      const cameFromLink = await handleTokenFromUrl();
+      if (cameFromLink) return;
+
+      const existingSession = getStoredSessionToken();
+      if (existingSession && stored) {
+        document.getElementById("loginForm").style.display = "none";
+        await loadAccount(stored, existingSession);
+      }
+    })();
   </script>
 </body>
 </html>
