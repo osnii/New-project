@@ -11,6 +11,8 @@ import {
   PLANS,
   verifyTransaction as verifyPaystackTransaction,
   isValidWebhookSignature as isValidPaystackSignature,
+  findActiveSubscriptionForEmail,
+  disableSubscription,
 } from "./lib/paystack.js";
 import {
   initiateTransaction as initiateSquadTransaction,
@@ -26,6 +28,7 @@ import {
   notifyAdminOfRefundRequest,
   sendLoginLinkEmail,
   sendTrialEndingReminder,
+  sendCancellationConfirmation,
 } from "./lib/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -165,6 +168,16 @@ function isTrialExpired(member) {
   return !!member && member.Plan === "trial" && member.RenewalDate && new Date(member.RenewalDate) < new Date();
 }
 
+// A cancelled paid member (RenewalCancelled set, see /api/cancel-subscription)
+// keeps full access through the period they already paid for — Status stays
+// "Active" the whole time, matching the policy text on /policies.html ("stays
+// active until the end of your current billing period"). Once RenewalDate
+// passes with no further charge coming, access lapses the same way a trial's
+// does: computed live here, no cron job or webhook re-check required.
+function hasCancelledRenewalLapsed(member) {
+  return !!member && !!member.RenewalCancelled && member.RenewalDate && new Date(member.RenewalDate) < new Date();
+}
+
 // Free-tier members only get member pricing on products flagged
 // FreeAccess=TRUE (a curated sample) — everything else stays locked to
 // nudge the upgrade. Paid members (including an unexpired trial) unlock the
@@ -180,7 +193,11 @@ function computeMemberAccess(email, members) {
 
   return {
     activeMember,
-    isPaidMember: !!activeMember && activeMember.Plan !== "free" && !isTrialExpired(activeMember),
+    isPaidMember:
+      !!activeMember &&
+      activeMember.Plan !== "free" &&
+      !isTrialExpired(activeMember) &&
+      !hasCancelledRenewalLapsed(activeMember),
     isFreeMember: !!activeMember && activeMember.Plan === "free",
   };
 }
@@ -746,10 +763,16 @@ app.post(
       if (event.event === "subscription.disable" || event.event === "subscription.not_renew") {
         const email = event.data?.customer?.email;
         if (email) {
+          // Not Status: "Cancelled" — that would revoke access immediately,
+          // contradicting the policy text ("stays active until the end of
+          // your current billing period"). This can fire from Paystack's own
+          // hosted subscription management, independent of our
+          // /api/cancel-subscription button, so both paths need the same
+          // access-until-period-end behavior (see hasCancelledRenewalLapsed).
           await updateRowWhere(
             "Members",
-            (m) => (m.Email || "").toLowerCase() === email.toLowerCase(),
-            { Status: "Cancelled" }
+            (m) => (m.Email || "").toLowerCase() === email.toLowerCase() && (m.Status || "").toLowerCase() === "active",
+            { RenewalCancelled: new Date().toISOString().split("T")[0] }
           );
         }
       }
@@ -917,12 +940,74 @@ app.get("/api/account", async (req, res) => {
       startDate: member.StartDate,
       renewalDate: member.RenewalDate,
       trialExpired: isTrialExpired(member),
+      renewalCancelled: !!member.RenewalCancelled,
+      renewalLapsed: hasCancelledRenewalLapsed(member),
       referralCount: Number(member.ReferralCount) || 0,
       referralCredits: Number(member.ReferralCredits) || 0,
     });
   } catch (err) {
     console.error("Error reading account:", err.message);
     res.status(500).json({ error: "Could not load account" });
+  }
+});
+
+// Self-service cancellation — stops future billing, doesn't touch access for
+// the period already paid (see hasCancelledRenewalLapsed). Same session-token
+// auth as /api/account, since this is more consequential than viewing your
+// own plan: it changes real billing state.
+app.post("/api/cancel-subscription", express.json(), async (req, res) => {
+  const { email, token } = req.body || {};
+  if (!email || !token) return res.status(400).json({ success: false, error: "Email and token are required" });
+
+  const verified = verifyToken(token);
+  if (!verified || verified.email.toLowerCase() !== String(email).toLowerCase()) {
+    return res.status(401).json({ success: false, error: "Please sign in again — your session may have expired" });
+  }
+
+  try {
+    const members = await readRows("Members");
+    const member = members.find(
+      (m) => (m.Email || "").toLowerCase() === String(email).toLowerCase() && (m.Status || "").toLowerCase() === "active"
+    );
+    if (!member) return res.status(404).json({ success: false, error: "No active membership found for that email" });
+
+    if (member.Plan === "free" || member.Plan === "trial") {
+      return res.status(400).json({ success: false, error: "This plan has no renewal to cancel" });
+    }
+    if (member.RenewalCancelled) {
+      return res.json({ success: true, renewalDate: member.RenewalDate, alreadyCancelled: true });
+    }
+
+    if (member.PaymentProvider === "paystack") {
+      const subscription = await findActiveSubscriptionForEmail(member.Email);
+      // No active subscription found is treated as success, not an error —
+      // there's genuinely nothing left to disable (e.g. it already lapsed
+      // or was disabled some other way Paystack's side), so recording the
+      // cancellation here is accurate, not a false claim.
+      if (subscription) {
+        await disableSubscription(subscription.subscription_code, subscription.email_token);
+      }
+    }
+    // Squad has no subscription object to disable — cancelling just means
+    // "stop nudging me to pay again," which RenewalCancelled alone covers.
+
+    await updateRowWhere(
+      "Members",
+      (m) => (m.Email || "").toLowerCase() === member.Email.toLowerCase() && (m.Status || "").toLowerCase() === "active",
+      { RenewalCancelled: new Date().toISOString().split("T")[0] }
+    );
+
+    sendCancellationConfirmation({ to: member.Email, name: member.Name, accessUntil: member.RenewalDate }).catch((err) =>
+      console.error("Error sending cancellation confirmation email:", err.message)
+    );
+
+    res.json({ success: true, renewalDate: member.RenewalDate });
+  } catch (err) {
+    console.error("Error cancelling subscription:", err.response?.data || err.message);
+    res.status(500).json({
+      success: false,
+      error: "Couldn't cancel automatically — email or WhatsApp us and we'll cancel it manually.",
+    });
   }
 });
 

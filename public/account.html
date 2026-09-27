@@ -54,6 +54,7 @@
           <div id="accTrialExpiredNotice" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; background: #fff3ea; color: #9a4b00; font-size: 14px;">
             Your free trial has ended — <a href="/#pricing">subscribe to keep full access</a>.
           </div>
+          <div id="accRenewalCancelledNotice" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; background: #fff3ea; color: #9a4b00; font-size: 14px;"></div>
           <div class="account-row"><span>Referral Credits</span><strong id="accReferral"></strong></div>
           <div id="accRefundRow" class="account-row"><span>Refund Guarantee</span><strong id="accRefundEligibility"></strong></div>
         </div>
@@ -61,8 +62,11 @@
           <button type="button" id="accRequestRefundBtn" class="btn-secondary" style="width: 100%; margin-bottom: 10px;" onclick="openRefundModal()">
             Request a Refund
           </button>
+          <button type="button" id="accCancelRenewalBtn" class="btn-secondary" style="width: 100%; margin-bottom: 10px;" onclick="handleCancelRenewal()">
+            Cancel Renewal
+          </button>
           <p style="text-align: center; font-size: 13px; color: var(--gray);">
-            To cancel renewal, email <a href="mailto:priceedgeio@gmail.com">priceedgeio@gmail.com</a> or
+            Questions about your membership? Email <a href="mailto:priceedgeio@gmail.com">priceedgeio@gmail.com</a> or
             message us on <a href="https://wa.me/2347054600639" target="_blank" rel="noopener">WhatsApp</a> —
             see our <a href="/policies.html">policies page</a> for full terms.
           </p>
@@ -190,13 +194,36 @@
         const PLAN_LABELS = { free: "Free", basic: "Basic", trial: "Free Trial" };
         document.getElementById("accPlan").textContent = PLAN_LABELS[data.plan] || data.plan;
         const statusEl = document.getElementById("accStatus");
-        statusEl.textContent = data.status;
-        statusEl.className = data.status === "Active" ? "status-active" : "";
+        // Status stays "Active" in the sheet even after a cancelled renewal's
+        // period lapses (see hasCancelledRenewalLapsed server-side) — that's
+        // correct for access logic, but showing raw "Active" here would be
+        // misleading once access has actually ended, so relabel just the
+        // display for that one case.
+        statusEl.textContent = data.renewalLapsed ? "Ended" : data.status;
+        statusEl.className = data.status === "Active" && !data.renewalLapsed ? "status-active" : "";
         document.getElementById("accRenewal").textContent = data.renewalDate;
         document.getElementById("accRenewalLabel").textContent =
           data.plan === "trial" ? (data.trialExpired ? "Trial ended" : "Trial ends") : "Renews";
         document.getElementById("accTrialExpiredNotice").style.display =
           data.plan === "trial" && data.trialExpired ? "block" : "none";
+
+        const cancelledNoticeEl = document.getElementById("accRenewalCancelledNotice");
+        if (data.plan !== "trial" && data.plan !== "free" && data.renewalLapsed) {
+          cancelledNoticeEl.textContent = `Your membership ended on ${data.renewalDate} — subscribe again to regain full access.`;
+          cancelledNoticeEl.style.display = "block";
+        } else if (data.plan !== "trial" && data.plan !== "free" && data.renewalCancelled) {
+          cancelledNoticeEl.textContent = `Renewal cancelled — you'll keep full access until ${data.renewalDate}.`;
+          cancelledNoticeEl.style.display = "block";
+        } else {
+          cancelledNoticeEl.style.display = "none";
+        }
+
+        // Nothing to cancel for free/trial (no renewal), or if already
+        // cancelled/lapsed (button already did its job or access is gone).
+        document.getElementById("accCancelRenewalBtn").style.display =
+          data.plan !== "free" && data.plan !== "trial" && !data.renewalCancelled && !data.renewalLapsed
+            ? "block"
+            : "none";
 
         const referralCredits = data.referralCredits || 0;
         const referralCount = data.referralCount || 0;
@@ -269,6 +296,41 @@
         "Enter the email you subscribed with — we'll email you a link to sign in, no password needed.";
       document.getElementById("loginForm").style.display = "block";
       showToast("Signed out.");
+    }
+
+    async function handleCancelRenewal() {
+      const ok = confirm(
+        "Cancel your renewal? You'll keep full access until your current period ends, and won't be charged again."
+      );
+      if (!ok) return;
+
+      const email = getStoredMemberEmail();
+      const sessionToken = getStoredSessionToken();
+      const btn = document.getElementById("accCancelRenewalBtn");
+      const originalText = btn.textContent;
+      btn.textContent = "Cancelling...";
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/cancel-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, token: sessionToken }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast("Renewal cancelled — check your email for details.");
+          await loadAccount(email, sessionToken);
+        } else {
+          showToast(data.error || "Couldn't cancel automatically.");
+        }
+      } catch {
+        showToast("Something went wrong. Try again shortly.");
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
     }
 
     function openRefundModal() {

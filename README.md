@@ -334,18 +334,43 @@ actually works today (assisted, off-platform order completion — not an
 on-platform checkout), so don't tighten the wording to imply more than the
 app currently does without updating the actual flow to match.
 
-**Cancellation** has no self-service UI yet — the policy says so explicitly
-and directs members to email `EMAIL_FROM_ADDRESS` or message the WhatsApp number
-hardcoded into `policies.html`/`account.html` (`wa.me/2347054600639`) to
-cancel renewal. If that number ever changes, it's a plain-text string in
-both files — no env var, just find-and-replace. For a Paystack
-member, actually disabling the subscription still needs a real action on
-your end (Paystack dashboard, or their API) — the existing
-`/api/paystack/webhook` handler already sets `Status: Cancelled` in Members
-when Paystack reports `subscription.disable`/`subscription.not_renew`, so
-that part needs no new code. Squad members never auto-renew in the first
-place (see above), so there's nothing to cancel for them beyond just not
-paying again next cycle.
+**Cancellation is self-service** via `POST /api/cancel-subscription` on
+`/account.html` (same session-token auth as `/api/account` — this changes
+real billing state, so it needs more than just knowing an email). The
+email/WhatsApp channel (`wa.me/2347054600639`, hardcoded plain-text in
+`policies.html`/`account.html` — no env var, just find-and-replace if it
+ever changes) stays as a documented fallback for when self-service fails.
+
+- **Access continues through the period already paid for** — cancelling
+  never sets `Status: "Cancelled"` immediately; that would revoke access on
+  the spot, contradicting the policy text ("stays active until the end of
+  your current billing period"). Instead it sets a new `Members.RenewalCancelled`
+  date, and `hasCancelledRenewalLapsed` (server.js) checks it live against
+  `RenewalDate` on every request — same "no cron job" pattern as trial
+  expiry. `/api/account`'s `renewalLapsed` field lets `/account.html` show
+  "Ended" once that date passes, even though the sheet's `Status` column
+  never changes.
+- **Paystack**: looks up the member's active subscription by email
+  (`GET /customer/:email` — Paystack returns a customer's `subscriptions[]`
+  inline, so nothing needs to be captured/stored at signup time) and calls
+  `POST /subscription/disable` on it. No active subscription found is
+  treated as success, not an error — there's genuinely nothing left to
+  disable. **Not live-tested against a real subscription** — `.env` still
+  has placeholder `PAYSTACK_*` keys (Paystack checkout itself is commented
+  out in `index.html` pending real keys), so this path only has correctness
+  checked against Paystack's documented API and a graceful-failure test (bad
+  credentials → clear error naming the manual fallback, nothing silently
+  marked cancelled). Verify it for real once Paystack goes live.
+- **Squad** has no subscription object to disable in the first place (see
+  above) — cancelling just sets `RenewalCancelled` so the member correctly
+  loses access at `RenewalDate` instead of keeping it forever, with no
+  external API call needed. This is the actually-tested path today (Squad
+  is the only live payment provider until Paystack's real keys are added).
+- The existing `/api/paystack/webhook` handler (`subscription.disable`/
+  `subscription.not_renew`) sets the same `RenewalCancelled` field instead of
+  `Status: Cancelled` now too — a customer can also cancel via Paystack's own
+  hosted subscription management, independent of the button here, and both
+  paths need the same access-until-period-end behavior.
 
 **Refund requests** (the 48-hour first-membership guarantee) go through
 `POST /api/refund-request` on `/account.html`, into a new `RefundRequests`
