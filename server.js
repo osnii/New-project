@@ -230,7 +230,7 @@ async function creditReferralReward({ referredBy, newMemberEmail, amountPaid }) 
       name: referrer.Name,
       rewardAmount: REFERRAL_REWARD_NAIRA,
       totalCredits: newCredits,
-    }); // fire-and-forget
+    }).catch((err) => console.error("Error sending referral reward email:", err.message)); // fire-and-forget
   } catch (err) {
     console.error("Error crediting referral reward:", err.message);
   }
@@ -711,7 +711,9 @@ app.post("/api/auth/request-link", express.json(), async (req, res) => {
       const token = signToken(member.Email, Date.now() + LOGIN_LINK_TTL_MS);
       const siteUrl = process.env.APP_BASE_URL || "http://localhost:5000";
       const link = `${siteUrl}/account.html?token=${token}`;
-      sendLoginLinkEmail({ to: member.Email, name: member.Name, link }); // fire-and-forget
+      sendLoginLinkEmail({ to: member.Email, name: member.Name, link }).catch((err) =>
+        console.error("Error sending login link email:", err.message)
+      ); // fire-and-forget
     }
 
     res.json({ success: true });
@@ -813,8 +815,12 @@ app.post("/api/contractor-lead", express.json(), async (req, res) => {
     res.json({ success: true });
 
     // Fire-and-forget — the lead is already recorded either way.
-    sendContractorLeadConfirmation({ to: email, name });
-    notifyAdminOfContractorLead({ name, email, phone, businessName, message });
+    sendContractorLeadConfirmation({ to: email, name }).catch((err) =>
+      console.error("Error sending contractor lead confirmation email:", err.message)
+    );
+    notifyAdminOfContractorLead({ name, email, phone, businessName, message }).catch((err) =>
+      console.error("Error sending contractor lead admin notification:", err.message)
+    );
   } catch (err) {
     console.error("Error recording contractor lead:", err.message);
     res.status(500).json({ success: false, error: "Could not submit request" });
@@ -992,7 +998,7 @@ app.post("/api/group-buys/:id/pledge", express.json(), async (req, res) => {
           name: pledger.Name,
           productName,
           groupPrice: Number(groupBuy.GroupPrice) || 0,
-        }); // fire-and-forget
+        }).catch((err) => console.error("Error sending group buy success email:", err.message)); // fire-and-forget
       }
     }
 
@@ -1119,7 +1125,9 @@ app.post("/api/refund-request", express.json(), async (req, res) => {
     });
 
     res.json({ success: true });
-    notifyAdminOfRefundRequest({ email, reason, detail }); // fire-and-forget
+    notifyAdminOfRefundRequest({ email, reason, detail }).catch((err) =>
+      console.error("Error sending refund request admin notification:", err.message)
+    ); // fire-and-forget
   } catch (err) {
     console.error("Error recording refund request:", err.message);
     res.status(500).json({ success: false, error: "Could not submit request" });
