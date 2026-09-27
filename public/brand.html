@@ -105,6 +105,13 @@
               ? `<button type="button" class="price-lock-btn" onclick="lockPrice('${escapeHtmlAttr(jsStringLiteral(p.id))}', this)">Lock this price for ${config.priceLockDays || 14} days</button>`
               : "";
 
+            const orderRequestHtml = p.memberPrice
+              ? `<div class="order-request-row" style="display: flex; gap: 8px; margin-top: 8px;">
+                   <input type="number" min="1" value="1" class="form-input" style="width: 70px;" id="qty-${escapeHtmlAttr(p.id)}" />
+                   <button type="button" class="btn-secondary" style="flex: 1;" onclick="requestOrder('${escapeHtmlAttr(jsStringLiteral(p.id))}', this)">Request to Order</button>
+                 </div>`
+              : "";
+
             return `
               <div class="product-card">
                 ${p.imageUrl ? `<img src="${escapeHtmlAttr(p.imageUrl)}" alt="${escapeHtmlAttr(p.name)}" />` : ""}
@@ -114,6 +121,7 @@
                   <div class="price-row">${priceHtml}</div>
                   ${p.warrantyInfo ? `<div class="locked-price" style="font-style: normal;">${escapeHtmlAttr(p.warrantyInfo)}</div>` : ""}
                   ${priceLockHtml}
+                  ${orderRequestHtml}
                 </div>
               </div>`;
           })
@@ -168,6 +176,46 @@
         }
       } catch {
         showToast("Something went wrong. Try again shortly.");
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    async function requestOrder(productId, btn) {
+      const email = getStoredMemberEmail();
+      if (!email) {
+        showToast("Sign in with your member email first.");
+        return;
+      }
+
+      const qtyInput = document.getElementById(`qty-${productId}`);
+      const quantity = parseInt(qtyInput?.value, 10);
+      if (!quantity || quantity < 1) {
+        showToast("Enter a valid quantity first.");
+        return;
+      }
+
+      const originalText = btn.textContent;
+      btn.textContent = "Requesting...";
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/order-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, productId, quantity }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          trackEvent("request_order", { email, brandSlug: slug, detail: productId, quantity });
+          showToast("Order request sent — we'll reach out to complete it.");
+        } else {
+          showToast(data.error || "Couldn't submit your order request.");
+        }
+      } catch {
+        showToast("Something went wrong. Try again shortly.");
+      } finally {
         btn.textContent = originalText;
         btn.disabled = false;
       }

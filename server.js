@@ -29,6 +29,7 @@ import {
   sendLoginLinkEmail,
   sendTrialEndingReminder,
   sendCancellationConfirmation,
+  notifyAdminOfOrderRequest,
 } from "./lib/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -98,6 +99,13 @@ const TRIAL_REMINDER_DAYS_BEFORE = Number(process.env.TRIAL_REMINDER_DAYS_BEFORE
 const TRIAL_REMINDER_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 let lastTrialReminderCheckAt = 0;
 const RETAIL_PRICE_MAX_AGE_DAYS = Number(process.env.RETAIL_PRICE_MAX_AGE_DAYS) || 30;
+// Caps how many units a Basic/trial member can request per calendar month at
+// the flat per-unit member price — past this, they're clearly buying at
+// volume and should go through the contractor/bulk-quote flow instead, which
+// exists specifically for pricing that doesn't scale down to a single-unit
+// rate. A starting guess, not a validated threshold — watch real request
+// volume before treating it as settled.
+const ORDER_QTY_CAP_PER_MONTH = Number(process.env.ORDER_QTY_CAP_PER_MONTH) || 3;
 const GROUP_BUY_LOOKBACK_DAYS = Number(process.env.GROUP_BUY_LOOKBACK_DAYS) || 45;
 // Normalizes raw counts into a 0-100 score for the group-buy recommendation
 // view. Tuned low for a pre-launch site with little traffic yet — revisit
@@ -845,6 +853,93 @@ app.post("/api/price-lock", express.json(), async (req, res) => {
   } catch (err) {
     console.error("Error locking price:", err.message);
     res.status(500).json({ success: false, error: "Could not lock this price" });
+  }
+});
+
+// Logs a request to actually buy a product at member pricing — fulfillment
+// still happens off-platform (WhatsApp/phone), same as everywhere else in
+// this MVP; this just gives the founder a record to follow up on and gives
+// the app something real to enforce ORDER_QTY_CAP_PER_MONTH against. Without
+// this, a Basic/trial member could buy unlimited volume at the flat
+// per-unit member price, which is exactly what the separate bulk-quote flow
+// exists to price differently.
+app.post("/api/order-request", express.json(), async (req, res) => {
+  const { email, productId, quantity } = req.body || {};
+  const qty = Number(quantity);
+
+  if (!email || !productId || !Number.isInteger(qty) || qty < 1) {
+    return res.status(400).json({ success: false, error: "Email, productId, and a positive whole quantity are required" });
+  }
+
+  try {
+    const [members, products, orderRequests] = await Promise.all([
+      readRows("Members"),
+      readRows("Products"),
+      readRows("OrderRequests"),
+    ]);
+
+    const { isPaidMember, isFreeMember, activeMember } = computeMemberAccess(email, members);
+    const product = products.find((p) => p.ProductID === productId);
+    if (!product) return res.status(404).json({ success: false, error: "Product not found" });
+
+    const isFreeSample = (product.FreeAccess || "").toLowerCase() === "true";
+    const unlocked = isPaidMember || (isFreeMember && isFreeSample);
+    if (!unlocked) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Subscribe to unlock this product's price before requesting an order" });
+    }
+
+    // Free-sample members already see at most one product per brand, so the
+    // volume cap has nothing meaningful to bound there — only applies to
+    // Basic/trial, the tiers that unlock the full catalog at one flat rate.
+    if (isPaidMember) {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const usedThisMonth = orderRequests
+        .filter(
+          (r) =>
+            (r.Email || "").toLowerCase() === email.toLowerCase() &&
+            r.Timestamp &&
+            new Date(r.Timestamp) >= monthStart
+        )
+        .reduce((sum, r) => sum + (Number(r.Quantity) || 0), 0);
+
+      if (usedThisMonth + qty > ORDER_QTY_CAP_PER_MONTH) {
+        const remaining = Math.max(0, ORDER_QTY_CAP_PER_MONTH - usedThisMonth);
+        return res.status(403).json({
+          success: false,
+          capExceeded: true,
+          remaining,
+          error: `That would put you over this month's ${ORDER_QTY_CAP_PER_MONTH}-unit limit (${remaining} left). For larger volumes, request a bulk quote from the homepage instead.`,
+        });
+      }
+    }
+
+    const timestamp = new Date().toISOString();
+    await appendRow("OrderRequests", {
+      OrderRequestID: `ORDER-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      Timestamp: timestamp,
+      Email: email,
+      Name: activeMember?.Name || "",
+      ProductID: productId,
+      ProductName: product.Name || "",
+      BrandSlug: product.BrandSlug || "",
+      Quantity: qty,
+      Status: "New",
+    });
+
+    notifyAdminOfOrderRequest({
+      email,
+      name: activeMember?.Name || "",
+      productName: product.Name || "",
+      quantity: qty,
+    }).catch((err) => console.error("Error sending order request admin notification:", err.message));
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error recording order request:", err.message);
+    res.status(500).json({ success: false, error: "Could not submit your order request" });
   }
 });
 

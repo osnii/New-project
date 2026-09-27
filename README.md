@@ -233,6 +233,34 @@ and the Setup section above). If you ever see the same silent
 `Connection timeout` symptom again with a different SMTP provider, it's
 worth suspecting the same root cause before debugging TLS/auth settings.
 
+## Order requests and the monthly quantity cap (`POST /api/order-request`)
+
+Every brand product page now has a quantity input + "Request to Order"
+button next to the price-lock button (unlocked products only). Submitting
+it logs a row to a new `OrderRequests` tab (`OrderRequestID`, `Timestamp`,
+`Email`, `Name`, `ProductID`, `ProductName`, `BrandSlug`, `Quantity`,
+`Status`) and emails the business inbox — fulfillment (payment, delivery)
+still happens off-platform from there, same as every other purchase in this
+MVP. Nothing here is a real checkout; it's a structured way to say "I want
+to buy this" instead of a customer having to message WhatsApp cold.
+
+**Why this exists**: the separate bulk/contractor quote flow
+(`POST /api/contractor-lead`, see below) only makes sense if it actually
+prices differently from just subscribing to Basic — and until this,
+nothing stopped a Basic member from buying unlimited volume at the flat
+per-unit member price, making the quote flow pointless. `ORDER_QTY_CAP_PER_MONTH`
+(default 3) caps how many total units a Basic/trial member can request
+across all products in a calendar month; going over it is rejected with a
+message pointing them to the bulk-quote flow instead. Free-sample members
+are exempt — they already see at most one product per brand, so the cap
+has nothing meaningful to bound there.
+
+The cap is a starting guess, not a validated threshold — watch
+`OrderRequests` for how real members actually order before tightening or
+loosening it. It's also easy to abuse today the same way trials are (a
+different email resets the monthly count) — an accepted limitation shared
+with the rest of this MVP's identity model, not solved here.
+
 ## Group buys (demand-aggregation, no payment collection yet)
 
 `/group-buys.html` lets a visitor pledge to buy a product alongside others —

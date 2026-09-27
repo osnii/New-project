@@ -47,3 +47,5 @@ services:
         sync: false
       - key: TRIAL_REMINDER_DAYS_BEFORE
         sync: false
+      - key: ORDER_QTY_CAP_PER_MONTH
+        sync: false
