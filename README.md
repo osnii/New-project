@@ -122,11 +122,13 @@ read directly off the sheet. `Status` is yours to update by hand (e.g. to
      Keys) and, optionally, `SQUAD_BASE_URL` if you're going live.
    - `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`
      from a Google Cloud service account with the Sheets API enabled.
-   - `SMTP_USER` (a Gmail address) and `SMTP_PASS` — not your normal Gmail
-     password, a 16-character **App Password**. Turn on 2-Step Verification
-     on that Google account first, then generate one at
-     myaccount.google.com/apppasswords. Without this, subscriptions still
-     work — the server just logs a warning and skips the email.
+   - `BREVO_API_KEY` from Brevo (Settings → SMTP & API → API Keys) and
+     `EMAIL_FROM_ADDRESS` — the address to send from, which must be added as
+     a "verified sender" in Brevo first (Settings → Senders; just a
+     confirmation email, no domain ownership needed). Without this,
+     subscriptions still work — the server just logs a warning and skips
+     the email. (Direct Gmail SMTP was tried first but connections timed
+     out from Render's network — see "Known issues" below.)
    - `REFERRAL_REWARD_NAIRA` (default 500) and `PRICE_LOCK_DAYS` (default 14)
      — both optional, sensible defaults if you skip them.
 2. `npm install`
@@ -167,6 +169,23 @@ you (or anyone) can open from any computer or phone:
 
 The Google Sheet stays the single source of truth either way — this just
 moves where the Node process itself runs, from your machine to Render's.
+
+### Known issue: direct SMTP to Gmail doesn't work from Render
+
+Confirmation/login-link emails were originally sent via nodemailer over
+direct SMTP to `smtp.gmail.com`, using a Gmail account + App Password. That
+works fine locally, but on Render every send failed with a silent
+`Connection timeout` after 2 minutes — tried on both port 465 (implicit
+TLS) and 587 (STARTTLS), same result on both. Gmail (like many providers)
+appears to silently drop raw SMTP-AUTH connections from shared
+cloud-hosting IP ranges, with no error returned to explain why — this is
+common enough to be a known class of issue with cloud PaaS + Gmail SMTP,
+not specific to this app's config.
+
+The fix: send over Brevo's HTTPS API instead of raw SMTP (see `lib/email.js`
+and the Setup section above). If you ever see the same silent
+`Connection timeout` symptom again with a different SMTP provider, it's
+worth suspecting the same root cause before debugging TLS/auth settings.
 
 ## Group buys (demand-aggregation, no payment collection yet)
 
@@ -270,7 +289,7 @@ on-platform checkout), so don't tighten the wording to imply more than the
 app currently does without updating the actual flow to match.
 
 **Cancellation** has no self-service UI yet — the policy says so explicitly
-and directs members to email `SMTP_USER` or message the WhatsApp number
+and directs members to email `EMAIL_FROM_ADDRESS` or message the WhatsApp number
 hardcoded into `policies.html`/`account.html` (`wa.me/2347054600639`) to
 cancel renewal. If that number ever changes, it's a plain-text string in
 both files — no env var, just find-and-replace. For a Paystack
@@ -353,10 +372,11 @@ oversight.
   enforced anywhere else — nothing stops you from forgetting to apply a
   credit or honor a locked price when you actually fulfill an order
   off-platform. Worth wiring into a real checkout once one exists.
-- Confirmation emails send via plain Gmail SMTP — fine for testing, but
-  expect Spam-folder placement (no custom domain, no SPF/DKIM/DMARC
-  reputation) and a ~500/day sending cap. Before a real launch, switch to a
-  transactional email service (Resend, SendGrid, Mailgun) on your own domain.
+- Email sends via Brevo's HTTP API (see "Known issues" below for why not
+  direct SMTP) using a single verified-sender address, not a verified
+  domain — fine for an MVP's volume, but expect some Spam-folder placement
+  without your own domain's SPF/DKIM/DMARC. Verify a domain in Brevo once
+  you have one, no code change needed.
 - Google Sheets as a database won't scale past a small catalog and low
   request volume, but it's fast to inspect and needs no server — right
   trade-off for validating demand before building a real backend.
