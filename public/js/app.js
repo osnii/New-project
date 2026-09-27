@@ -152,6 +152,12 @@ function renderPlanCardPrices() {
     const trialLabel = document.getElementById("trialDaysLabel");
     if (trialLabel && config.trialDays) trialLabel.textContent = `/${config.trialDays} days`;
 
+    if (config.orderQtyCapPerMonth) {
+      document.querySelectorAll("#orderCapLabelTrial, #orderCapLabelBasic").forEach((el) => {
+        el.textContent = config.orderQtyCapPerMonth;
+      });
+    }
+
     document.querySelectorAll("[data-plan-tier]").forEach((card) => {
       const tier = card.dataset.planTier;
       const plan = config.plans[resolvePlanKey(tier)];

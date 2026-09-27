@@ -134,6 +134,7 @@ app.get("/api/config", (req, res) => {
     paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY,
     priceLockDays: PRICE_LOCK_DAYS,
     trialDays: TRIAL_DAYS,
+    orderQtyCapPerMonth: ORDER_QTY_CAP_PER_MONTH,
     plans: Object.fromEntries(
       Object.entries(PLANS).map(([key, p]) => [
         key,

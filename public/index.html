@@ -88,13 +88,13 @@
         <div class="plan-card featured">
           <h3>Free Trial</h3>
           <div class="plan-price">₦0<span id="trialDaysLabel">/30 days</span></div>
-          <p class="desc">Full member pricing across every brand — no card required. Subscribe any time before it ends to keep access.</p>
+          <p class="desc">Full member pricing across every brand — no card required. Up to <span id="orderCapLabelTrial">3</span> units/month while your trial lasts.</p>
           <button class="btn-primary" onclick="openTrialSignupModal()">Start Free Trial</button>
         </div>
         <div class="plan-card" data-plan-tier="basic">
           <h3>Basic</h3>
           <div class="plan-price">₦5,000<span>/mo</span></div>
-          <p class="desc">Full member pricing across every brand in the catalog.</p>
+          <p class="desc">Full member pricing across every brand in the catalog — up to <span id="orderCapLabelBasic">3</span> units/month.</p>
           <p class="annual-savings-note" data-plan-tier-savings="basic" style="display: none;"></p>
           <button class="btn-primary" onclick="openSubscribeModal(resolvePlanKey('basic'))">Join Basic</button>
         </div>
@@ -102,7 +102,7 @@
       <p class="section-subtitle" style="margin-top: 24px;">
         One membership, full catalog access. We'll introduce higher tiers only once they come with something
         genuinely different — priority sourcing, faster support, or similar — not just a higher price for the
-        same thing.
+        same thing. Buying more than that each month? <a href="#wholesale">Request a bulk quote</a> instead.
       </p>
       <div class="trust-strip">
         <span>Warranty confirmed before purchase</span>
