@@ -45,3 +45,5 @@ services:
         sync: false
       - key: TRIAL_DAYS
         sync: false
+      - key: TRIAL_REMINDER_DAYS_BEFORE
+        sync: false

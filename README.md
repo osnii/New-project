@@ -175,6 +175,18 @@ payment captured at all.
   trial member (via `trialExpired` in `GET /api/account`), and hides the
   refund-guarantee row/button entirely for free and trial members — there's
   no payment to refund.
+- **A one-time reminder email fires `TRIAL_REMINDER_DAYS_BEFORE` (default 3)
+  days before a trial ends**, so losing access doesn't come as a surprise.
+  There's no cron job for this either: `checkAndSendTrialReminders` runs
+  opportunistically off the back of ordinary request traffic (a tiny
+  Express middleware calls it, fire-and-forget, on every request), throttled
+  by an in-memory timestamp to actually scan the Members sheet at most once
+  an hour. `Members.TrialReminderSentAt` (added as a real column — migrate
+  it into your own sheet if you copied this repo's `Members` tab before this
+  feature existed) ensures it's sent once per trial, not once an hour. On a
+  Render free instance that's spun down from inactivity, this simply doesn't
+  run until a request wakes it back up — the same trade-off the rest of
+  this MVP already accepts for background-style checks.
 
 ## Deploying it somewhere you can view from any device
 

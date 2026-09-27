@@ -25,6 +25,7 @@ import {
   sendGroupBuySuccessEmail,
   notifyAdminOfRefundRequest,
   sendLoginLinkEmail,
+  sendTrialEndingReminder,
 } from "./lib/email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -84,6 +85,15 @@ const PRICE_LOCK_DAYS = Number(process.env.PRICE_LOCK_DAYS) || 14;
 // no background job for this, computeMemberAccess just checks the date live
 // on every request, the same way price locks and retail-price-age checks do.
 const TRIAL_DAYS = Number(process.env.TRIAL_DAYS) || 30;
+// How many days before a trial ends to email a reminder, so losing full
+// access doesn't come as a surprise. Sent at most once per trial (tracked
+// via Members.TrialReminderSentAt) — there's no cron job for this, it's
+// opportunistically checked (throttled to once an hour) whenever any
+// request comes in, same "no background worker" approach as the trial
+// expiry check itself.
+const TRIAL_REMINDER_DAYS_BEFORE = Number(process.env.TRIAL_REMINDER_DAYS_BEFORE) || 3;
+const TRIAL_REMINDER_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+let lastTrialReminderCheckAt = 0;
 const RETAIL_PRICE_MAX_AGE_DAYS = Number(process.env.RETAIL_PRICE_MAX_AGE_DAYS) || 30;
 const GROUP_BUY_LOOKBACK_DAYS = Number(process.env.GROUP_BUY_LOOKBACK_DAYS) || 45;
 // Normalizes raw counts into a 0-100 score for the group-buy recommendation
@@ -99,6 +109,12 @@ const GROUP_BUY_SCORE_CAPS = { views: 50, lockedViews: 30, uniqueUsers: 20, lock
 const pendingSquadSignups = new Map();
 
 app.use(cors());
+// Fire-and-forget on every request; checkAndSendTrialReminders' own internal
+// throttle (see definition) keeps the actual Sheets scan to once an hour.
+app.use((req, res, next) => {
+  checkAndSendTrialReminders();
+  next();
+});
 app.use(express.static(path.join(__dirname, "public")));
 
 // Config the frontend needs (public key only, never the secret key)
@@ -167,6 +183,56 @@ function computeMemberAccess(email, members) {
     isPaidMember: !!activeMember && activeMember.Plan !== "free" && !isTrialExpired(activeMember),
     isFreeMember: !!activeMember && activeMember.Plan === "free",
   };
+}
+
+// Opportunistic, not scheduled — there's no cron job or background worker in
+// this app, so this runs off the back of ordinary traffic instead. The
+// module-level timestamp throttles the actual Sheets scan to once an hour
+// regardless of request volume; everything in between is a no-op check of
+// that timestamp. On a Render free instance that's spun down from
+// inactivity, this simply doesn't run until a request wakes it back up —
+// same trade-off the rest of this MVP already accepts.
+async function checkAndSendTrialReminders() {
+  const now = Date.now();
+  if (now - lastTrialReminderCheckAt < TRIAL_REMINDER_CHECK_INTERVAL_MS) return;
+  lastTrialReminderCheckAt = now; // set immediately so concurrent requests don't double-trigger
+
+  try {
+    const members = await readRows("Members");
+    const today = new Date();
+    const reminderCutoff = new Date(today);
+    reminderCutoff.setDate(reminderCutoff.getDate() + TRIAL_REMINDER_DAYS_BEFORE);
+
+    const dueForReminder = members.filter((m) => {
+      if (m.Plan !== "trial") return false;
+      if ((m.Status || "").toLowerCase() !== "active") return false;
+      if (m.TrialReminderSentAt) return false;
+      if (!m.RenewalDate) return false;
+      const renewsAt = new Date(m.RenewalDate);
+      return renewsAt >= today && renewsAt <= reminderCutoff;
+    });
+
+    for (const member of dueForReminder) {
+      sendTrialEndingReminder({ to: member.Email, name: member.Name, trialEndsAt: member.RenewalDate })
+        .then(() => console.log(`Trial-ending reminder sent to ${member.Email}.`))
+        .catch((err) => console.error("Error sending trial-ending reminder email:", err.message));
+
+      await updateRowWhere(
+        "Members",
+        (m) =>
+          (m.Email || "").toLowerCase() === member.Email.toLowerCase() &&
+          (m.Status || "").toLowerCase() === "active" &&
+          m.Plan === "trial",
+        { TrialReminderSentAt: today.toISOString().split("T")[0] }
+      );
+    }
+
+    if (dueForReminder.length > 0) {
+      console.log(`Trial reminder check: sent ${dueForReminder.length} reminder(s).`);
+    }
+  } catch (err) {
+    console.error("Error checking trial reminders:", err.message);
+  }
 }
 
 function buildMemberRow({ reference, provider, name, email, phone, role, businessName, plan, amountPaid, referredBy }) {
