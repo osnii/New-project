@@ -711,9 +711,12 @@ app.post("/api/auth/request-link", express.json(), async (req, res) => {
       const token = signToken(member.Email, Date.now() + LOGIN_LINK_TTL_MS);
       const siteUrl = process.env.APP_BASE_URL || "http://localhost:5000";
       const link = `${siteUrl}/account.html?token=${token}`;
-      sendLoginLinkEmail({ to: member.Email, name: member.Name, link }).catch((err) =>
-        console.error("Error sending login link email:", err.message)
-      ); // fire-and-forget
+      console.log(`Login link requested for ${member.Email} — sending sign-in email...`);
+      sendLoginLinkEmail({ to: member.Email, name: member.Name, link })
+        .then(() => console.log(`Login link email sent to ${member.Email}.`))
+        .catch((err) => console.error("Error sending login link email:", err.message)); // fire-and-forget
+    } else {
+      console.log(`Login link requested for "${email}" — no matching member found.`);
     }
 
     res.json({ success: true });
