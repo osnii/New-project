@@ -33,13 +33,11 @@ services:
         sync: false
       - key: GOOGLE_PRIVATE_KEY
         sync: false
-      - key: SMTP_USER
+      - key: BREVO_API_KEY
         sync: false
-      - key: SMTP_PASS
+      - key: EMAIL_FROM_ADDRESS
         sync: false
       - key: APP_BASE_URL
-        sync: false
-      - key: SMTP_ALLOW_SELF_SIGNED
         sync: false
       - key: REFERRAL_REWARD_NAIRA
         sync: false
