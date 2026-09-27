@@ -149,6 +149,9 @@ function setBillingPeriod(period) {
 
 function renderPlanCardPrices() {
   getConfig().then((config) => {
+    const trialLabel = document.getElementById("trialDaysLabel");
+    if (trialLabel && config.trialDays) trialLabel.textContent = `/${config.trialDays} days`;
+
     document.querySelectorAll("[data-plan-tier]").forEach((card) => {
       const tier = card.dataset.planTier;
       const plan = config.plans[resolvePlanKey(tier)];
@@ -383,6 +386,55 @@ async function handleFreeSignupSubmit(event) {
   }
 }
 
+function openTrialSignupModal() {
+  trackEvent("open_subscribe", { plan: "trial" });
+  document.getElementById("trialSignupModal").classList.add("open");
+}
+
+function closeTrialSignupModal() {
+  document.getElementById("trialSignupModal").classList.remove("open");
+}
+
+async function handleTrialSignupSubmit(event) {
+  event.preventDefault();
+
+  const name = document.getElementById("trialUserName").value.trim();
+  const email = document.getElementById("trialUserEmail").value.trim();
+  const phone = document.getElementById("trialUserPhone").value.trim();
+  const referredBy = document.getElementById("trialUserReferredBy").value.trim();
+
+  const btn = document.getElementById("trialContinueBtn");
+  const originalText = btn.textContent;
+  btn.textContent = "Setting up...";
+  btn.disabled = true;
+
+  trackEvent("start_checkout", { plan: "trial", provider: "trial", email });
+
+  try {
+    const res = await fetch("/api/subscribe/trial", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, phone, role: "customer", referredBy }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      setStoredMemberEmail(email);
+      trackEvent("complete_signup", { plan: "trial", provider: "trial", email });
+      showToast("Your free trial is live! Check your email, then browse brands.");
+      closeTrialSignupModal();
+      setTimeout(() => window.location.assign("/brands.html"), 1200);
+    } else {
+      showToast(data.error || "Couldn't start your free trial.");
+    }
+  } catch {
+    showToast("Something went wrong. Try again shortly.");
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
 function openContractorLeadModal() {
   trackEvent("open_subscribe", { plan: "contractor_lead" });
   document.getElementById("contractorLeadModal").classList.add("open");
@@ -487,6 +539,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const freeForm = document.getElementById("freeSignupForm");
   if (freeForm) freeForm.addEventListener("submit", handleFreeSignupSubmit);
+
+  const trialForm = document.getElementById("trialSignupForm");
+  if (trialForm) trialForm.addEventListener("submit", handleTrialSignupSubmit);
 
   const brandRequestForm = document.getElementById("brandRequestForm");
   if (brandRequestForm) brandRequestForm.addEventListener("submit", handleBrandRequestSubmit);

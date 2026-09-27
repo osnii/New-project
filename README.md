@@ -142,6 +142,40 @@ read directly off the sheet. `Status` is yours to update by hand (e.g. to
    `https://<your-host>/api/paystack/webhook`, and a Squad webhook at
    `https://<your-host>/api/squad/webhook`.
 
+## Free trial (`/api/subscribe/trial`, no card required)
+
+A growth lever for pushing adoption before a harder monetization push
+(originally floated as "make it free for everyone until November" — this is
+the safer version of that): signing up grants the **full catalog**, same
+access as a paid Basic member, for `TRIAL_DAYS` (default 30) — no card, no
+payment captured at all.
+
+- **No auto-charge, because nothing was ever collected.** Unlike a typical
+  SaaS trial (card on file, auto-charges when the trial ends), this one
+  can't auto-convert — there's no card to charge. `buildMemberRow` sets
+  `Plan: "trial"` and stores the trial's end date in `RenewalDate` (the same
+  column a paid plan's renewal date lives in); `computeMemberAccess` checks
+  that date live on every request and revokes full-catalog access the
+  moment it passes — no cron job, no background worker, same pattern as
+  price locks and the retail-price-age check.
+- **Chosen over a card-required trial deliberately.** Paystack could support
+  a real "charge automatically after N days" trial (capture a card via an
+  authorization transaction, create the subscription with a future
+  `start_date`), but Squad has no auto-billing mechanism at all — a
+  card-required trial would only work cleanly for one of the two payment
+  providers, splitting the experience. No-card keeps both providers
+  equivalent: either way, converting means going through the normal
+  Paystack/Squad checkout before the trial ends.
+- **Idempotent on email**, same guard as `/api/subscribe/free` — an
+  already-active member (free, trial, or paid) hitting `/api/subscribe/trial`
+  again is a no-op, not a second trial. Nothing stops the same person using a
+  different email for another trial; that's an accepted limitation shared
+  with the rest of this MVP's identity model.
+- `/account.html` shows "Trial ends"/"Trial ended" instead of "Renews" for a
+  trial member (via `trialExpired` in `GET /api/account`), and hides the
+  refund-guarantee row/button entirely for free and trial members — there's
+  no payment to refund.
+
 ## Deploying it somewhere you can view from any device
 
 Running `npm run dev` only serves `http://localhost:5000` on the machine

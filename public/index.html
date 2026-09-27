@@ -92,6 +92,12 @@
           <p class="desc">See real member pricing on a sample deal per brand — no payment.</p>
           <button class="btn-secondary" onclick="openFreeSignupModal()">See Sample Deals</button>
         </div>
+        <div class="plan-card featured">
+          <h3>Free Trial</h3>
+          <div class="plan-price">₦0<span id="trialDaysLabel">/30 days</span></div>
+          <p class="desc">Full member pricing across every brand — no card required. Subscribe any time before it ends to keep access.</p>
+          <button class="btn-primary" onclick="openTrialSignupModal()">Start Free Trial</button>
+        </div>
         <div class="plan-card" data-plan-tier="basic">
           <h3>Basic</h3>
           <div class="plan-price">₦5,000<span>/mo</span></div>
@@ -225,6 +231,37 @@
         <div class="modal-buttons">
           <button type="button" class="btn-cancel" onclick="closeFreeSignupModal()">Cancel</button>
           <button type="submit" class="btn-continue" id="freeContinueBtn">See Sample Deals</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Free Trial Signup Modal -->
+  <div id="trialSignupModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeTrialSignupModal()">&times;</button>
+      <h2 class="modal-title">Start Your Free Trial</h2>
+      <p class="modal-description">Full member pricing across every brand — no card, no payment. Subscribe any time before your trial ends to keep access.</p>
+      <form id="trialSignupForm">
+        <div class="form-group">
+          <label class="form-label" for="trialUserName">Full Name</label>
+          <input type="text" class="form-input" id="trialUserName" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="trialUserEmail">Email Address</label>
+          <input type="email" class="form-input" id="trialUserEmail" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="trialUserPhone">Phone Number (optional)</label>
+          <input type="tel" class="form-input" id="trialUserPhone" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="trialUserReferredBy">Referred by (optional)</label>
+          <input type="text" class="form-input" id="trialUserReferredBy" placeholder="Friend's name or email" />
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn-cancel" onclick="closeTrialSignupModal()">Cancel</button>
+          <button type="submit" class="btn-continue" id="trialContinueBtn">Start Free Trial</button>
         </div>
       </form>
     </div>

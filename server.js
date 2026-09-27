@@ -79,6 +79,11 @@ function verifyToken(token) {
 }
 const REFERRAL_REWARD_NAIRA = Number(process.env.REFERRAL_REWARD_NAIRA) || 500;
 const PRICE_LOCK_DAYS = Number(process.env.PRICE_LOCK_DAYS) || 14;
+// Full catalog access with no card required — access reverts automatically
+// once TrialEndsAt (stored in the Members row's RenewalDate) passes; there's
+// no background job for this, computeMemberAccess just checks the date live
+// on every request, the same way price locks and retail-price-age checks do.
+const TRIAL_DAYS = Number(process.env.TRIAL_DAYS) || 30;
 const RETAIL_PRICE_MAX_AGE_DAYS = Number(process.env.RETAIL_PRICE_MAX_AGE_DAYS) || 30;
 const GROUP_BUY_LOOKBACK_DAYS = Number(process.env.GROUP_BUY_LOOKBACK_DAYS) || 45;
 // Normalizes raw counts into a 0-100 score for the group-buy recommendation
@@ -101,6 +106,7 @@ app.get("/api/config", (req, res) => {
   res.json({
     paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY,
     priceLockDays: PRICE_LOCK_DAYS,
+    trialDays: TRIAL_DAYS,
     plans: Object.fromEntries(
       Object.entries(PLANS).map(([key, p]) => [
         key,
@@ -135,9 +141,18 @@ async function memberExistsWithReference(reference) {
   return members.some((m) => m.PaymentReference === reference);
 }
 
+// A trial member's RenewalDate holds TrialEndsAt (buildMemberRow sets it to
+// signup + TRIAL_DAYS instead of the usual billing cycle) — past that date,
+// they're no better off than an anonymous visitor. No card was ever taken,
+// so there's nothing to auto-charge; this is the only enforcement.
+function isTrialExpired(member) {
+  return !!member && member.Plan === "trial" && member.RenewalDate && new Date(member.RenewalDate) < new Date();
+}
+
 // Free-tier members only get member pricing on products flagged
 // FreeAccess=TRUE (a curated sample) — everything else stays locked to
-// nudge the upgrade. Paid members unlock the whole catalog.
+// nudge the upgrade. Paid members (including an unexpired trial) unlock the
+// whole catalog.
 function computeMemberAccess(email, members) {
   const activeMember = email
     ? members.find(
@@ -149,7 +164,7 @@ function computeMemberAccess(email, members) {
 
   return {
     activeMember,
-    isPaidMember: !!activeMember && activeMember.Plan !== "free",
+    isPaidMember: !!activeMember && activeMember.Plan !== "free" && !isTrialExpired(activeMember),
     isFreeMember: !!activeMember && activeMember.Plan === "free",
   };
 }
@@ -157,7 +172,9 @@ function computeMemberAccess(email, members) {
 function buildMemberRow({ reference, provider, name, email, phone, role, businessName, plan, amountPaid, referredBy }) {
   const startDate = new Date();
   const renewalDate = new Date(startDate);
-  if (PLANS[plan]?.period === "year") {
+  if (plan === "trial") {
+    renewalDate.setDate(renewalDate.getDate() + TRIAL_DAYS);
+  } else if (PLANS[plan]?.period === "year") {
     renewalDate.setFullYear(renewalDate.getFullYear() + 1);
   } else {
     renewalDate.setMonth(renewalDate.getMonth() + 1);
@@ -453,6 +470,53 @@ app.post("/api/subscribe/free", express.json(), async (req, res) => {
   } catch (err) {
     console.error("Error creating free signup:", err.message);
     res.status(500).json({ success: false, error: "Could not complete signup" });
+  }
+});
+
+// No payment, no card — full catalog access for TRIAL_DAYS, same as a paid
+// Basic member. Access reverts automatically once the trial ends (see
+// isTrialExpired); there's nothing to auto-charge since no card was taken.
+// Idempotent on email, same as /api/subscribe/free, so an already-active
+// member (trial, free, or paid) can't stack a second trial on top.
+app.post("/api/subscribe/trial", express.json(), async (req, res) => {
+  const { name, email, phone, role, businessName, referredBy } = req.body;
+
+  if (!name || !email) {
+    return res.status(400).json({ success: false, error: "Name and email are required" });
+  }
+
+  try {
+    const members = await readRows("Members");
+    const alreadyActive = members.some(
+      (m) =>
+        (m.Email || "").toLowerCase() === email.toLowerCase() &&
+        (m.Status || "").toLowerCase() === "active"
+    );
+
+    if (alreadyActive) {
+      return res.json({ success: true });
+    }
+
+    const reference = `TRIAL-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { row, renewalDate } = buildMemberRow({
+      reference,
+      provider: "trial",
+      name,
+      email,
+      phone,
+      role,
+      businessName,
+      plan: "trial",
+      amountPaid: 0,
+      referredBy,
+    });
+    await appendRow("Members", row);
+    notifyNewMember({ email, name, plan: "trial", provider: "Trial", renewalDate }); // fire-and-forget
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error creating trial signup:", err.message);
+    res.status(500).json({ success: false, error: "Could not start trial" });
   }
 });
 
@@ -786,6 +850,7 @@ app.get("/api/account", async (req, res) => {
       status: member.Status,
       startDate: member.StartDate,
       renewalDate: member.RenewalDate,
+      trialExpired: isTrialExpired(member),
       referralCount: Number(member.ReferralCount) || 0,
       referralCredits: Number(member.ReferralCredits) || 0,
     });

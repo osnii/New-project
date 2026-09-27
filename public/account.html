@@ -50,12 +50,15 @@
           <div class="account-row"><span>Role</span><strong id="accRole"></strong></div>
           <div class="account-row"><span>Plan</span><strong id="accPlan"></strong></div>
           <div class="account-row"><span>Status</span><strong id="accStatus"></strong></div>
-          <div class="account-row"><span>Renews</span><strong id="accRenewal"></strong></div>
+          <div class="account-row"><span id="accRenewalLabel">Renews</span><strong id="accRenewal"></strong></div>
+          <div id="accTrialExpiredNotice" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; background: #fff3ea; color: #9a4b00; font-size: 14px;">
+            Your free trial has ended — <a href="/#pricing">subscribe to keep full access</a>.
+          </div>
           <div class="account-row"><span>Referral Credits</span><strong id="accReferral"></strong></div>
-          <div class="account-row"><span>Refund Guarantee</span><strong id="accRefundEligibility"></strong></div>
+          <div id="accRefundRow" class="account-row"><span>Refund Guarantee</span><strong id="accRefundEligibility"></strong></div>
         </div>
         <div id="accountActions" style="margin-top: 16px; display: none">
-          <button type="button" class="btn-secondary" style="width: 100%; margin-bottom: 10px;" onclick="openRefundModal()">
+          <button type="button" id="accRequestRefundBtn" class="btn-secondary" style="width: 100%; margin-bottom: 10px;" onclick="openRefundModal()">
             Request a Refund
           </button>
           <p style="text-align: center; font-size: 13px; color: var(--gray);">
@@ -184,11 +187,16 @@
         document.getElementById("accountIntro").style.display = "none";
         document.getElementById("accName").textContent = data.name;
         document.getElementById("accRole").textContent = data.role === "contractor" ? "Contractor / Wholesale Distributor" : "Customer";
-        document.getElementById("accPlan").textContent = data.plan;
+        const PLAN_LABELS = { free: "Free", basic: "Basic", trial: "Free Trial" };
+        document.getElementById("accPlan").textContent = PLAN_LABELS[data.plan] || data.plan;
         const statusEl = document.getElementById("accStatus");
         statusEl.textContent = data.status;
         statusEl.className = data.status === "Active" ? "status-active" : "";
         document.getElementById("accRenewal").textContent = data.renewalDate;
+        document.getElementById("accRenewalLabel").textContent =
+          data.plan === "trial" ? (data.trialExpired ? "Trial ended" : "Trial ends") : "Renews";
+        document.getElementById("accTrialExpiredNotice").style.display =
+          data.plan === "trial" && data.trialExpired ? "block" : "none";
 
         const referralCredits = data.referralCredits || 0;
         const referralCount = data.referralCount || 0;
@@ -197,13 +205,23 @@
             ? `₦${referralCredits.toLocaleString()} (${referralCount} referral${referralCount === 1 ? "" : "s"})`
             : "None yet";
 
-        // Informational only — StartDate is date-only (no time-of-day), so this
-        // is a rough hint, not the actual gate. Real eligibility is checked by
-        // a human against RequestedAt when a request comes in.
-        const eligibilityEl = document.getElementById("accRefundEligibility");
-        const hoursSinceStart = (Date.now() - new Date(data.startDate).getTime()) / 36e5;
-        eligibilityEl.textContent =
-          hoursSinceStart <= 48 ? "Within your 48-hour window" : "Window likely closed (first payment was a while ago)";
+        // Refund guarantee only applies to a paid first membership payment —
+        // free and trial signups never paid anything, so there's nothing to
+        // refund. Hide the row and button entirely rather than showing a
+        // confusing "window closed" message for a ₦0 signup.
+        const noPaymentMade = data.plan === "free" || data.plan === "trial";
+        document.getElementById("accRefundRow").style.display = noPaymentMade ? "none" : "flex";
+        document.getElementById("accRequestRefundBtn").style.display = noPaymentMade ? "none" : "block";
+
+        if (!noPaymentMade) {
+          // Informational only — StartDate is date-only (no time-of-day), so this
+          // is a rough hint, not the actual gate. Real eligibility is checked by
+          // a human against RequestedAt when a request comes in.
+          const eligibilityEl = document.getElementById("accRefundEligibility");
+          const hoursSinceStart = (Date.now() - new Date(data.startDate).getTime()) / 36e5;
+          eligibilityEl.textContent =
+            hoursSinceStart <= 48 ? "Within your 48-hour window" : "Window likely closed (first payment was a while ago)";
+        }
 
         document.getElementById("accountDetails").style.display = "block";
         document.getElementById("accountActions").style.display = "block";

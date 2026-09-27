@@ -43,3 +43,5 @@ services:
         sync: false
       - key: PRICE_LOCK_DAYS
         sync: false
+      - key: TRIAL_DAYS
+        sync: false
