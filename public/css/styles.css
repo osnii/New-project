@@ -293,7 +293,7 @@ section h2 {
 .product-card img {
   width: 100%;
   height: 160px;
-  object-fit: cover;
+  object-fit: contain;
   background: var(--bg-soft);
 }
 
